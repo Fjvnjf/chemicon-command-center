@@ -31,7 +31,7 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-const BRIDGE_URL = 'https://kept-capability-freight-accuracy.trycloudflare.com'
+const BRIDGE_URL = 'https://had-tender-computation-set.trycloudflare.com'
 
 async function sendMessage() {
   const text = input.value.trim()
