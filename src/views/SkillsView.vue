@@ -20,7 +20,7 @@ const totalCount = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-const BRIDGE_URL = 'https://enzyme-delaware-katrina-eagle.trycloudflare.com'
+const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
 
 // Group skills by category
 const skillsByCategory = computed(() => {

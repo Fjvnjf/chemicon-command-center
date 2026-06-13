@@ -12,7 +12,7 @@ interface ModelsResponse {
   providers_with_keys: string[]
 }
 
-const BRIDGE_URL = 'https://enzyme-delaware-katrina-eagle.trycloudflare.com'
+const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
 
 const currentModel = ref<CurrentModel | null>(null)
 const availableModels = ref<string[]>([])

@@ -9,7 +9,7 @@ export interface ChatInsight {
   routeName: string
 }
 
-const BRIDGE_URL = 'https://enzyme-delaware-katrina-eagle.trycloudflare.com'
+const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
 
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)

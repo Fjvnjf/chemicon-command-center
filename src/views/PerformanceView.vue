@@ -10,7 +10,7 @@ interface HealthResponse {
   checks: Record<string, HealthCheck>
 }
 
-const BRIDGE_URL = 'https://enzyme-delaware-katrina-eagle.trycloudflare.com'
+const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
 
 const checks = ref<Record<string, HealthCheck>>({})
 const overallOk = ref(false)

@@ -31,7 +31,7 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-const BRIDGE_URL = 'https://enzyme-delaware-katrina-eagle.trycloudflare.com'
+const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
 
 async function sendMessage() {
   const text = input.value.trim()
