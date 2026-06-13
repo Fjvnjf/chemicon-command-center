@@ -143,21 +143,21 @@ function threatBadge(level: string) {
     </div>
 
     <!-- Dynamic Briefings from Chat -->
-    <div v-if=\"competitorBriefings.length > 0\" class=\"card\">
-      <div class=\"card-header\">
+    <div v-if="competitorBriefings.length > 0" class="card">
+      <div class="card-header">
         <h3>📝 Briefings from Chat</h3>
-        <span class=\"badge badge-ok\">{{ competitorBriefings.length }} briefing{{ competitorBriefings.length > 1 ? 's' : '' }}</span>
+        <span class="badge badge-ok">{{ competitorBriefings.length }} briefing{{ competitorBriefings.length > 1 ? 's' : '' }}</span>
       </div>
-      <div class=\"briefing-list\">
-        <div v-for=\"b in competitorBriefings\" :key=\"b.id\" class=\"briefing-card\" :class=\"{ expanded: expandedBriefing === b.id }\">
-          <div class=\"briefing-header\" @click=\"toggleBriefing(b.id)\">
-            <span class=\"briefing-arrow\">{{ expandedBriefing === b.id ? '▾' : '▸' }}</span>
-            <span class=\"briefing-time\">{{ b.time }}</span>
-            <span class=\"briefing-question\">{{ b.question.slice(0, 100) }}{{ b.question.length > 100 ? '...' : '' }}</span>
-            <button class=\"briefing-dismiss\" @click.stop=\"appStore.removeBriefing(b.id)\" title=\"Remove\">×</button>
+      <div class="briefing-list">
+        <div v-for="b in competitorBriefings" :key="b.id" class="briefing-card" :class="{ expanded: expandedBriefing === b.id }">
+          <div class="briefing-header" @click="toggleBriefing(b.id)">
+            <span class="briefing-arrow">{{ expandedBriefing === b.id ? '▾' : '▸' }}</span>
+            <span class="briefing-time">{{ b.time }}</span>
+            <span class="briefing-question">{{ b.question.slice(0, 100) }}{{ b.question.length > 100 ? '...' : '' }}</span>
+            <button class="briefing-dismiss" @click.stop="appStore.removeBriefing(b.id)" title="Remove">×</button>
           </div>
-          <div v-if=\"expandedBriefing === b.id\" class=\"briefing-body\">
-            <div class=\"briefing-summary\" v-html=\"b.summary.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>').replace(/\\n/g, '<br>')\" />
+          <div v-if="expandedBriefing === b.id" class="briefing-body">
+            <div class="briefing-summary" v-html="b.summary.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>').replace(/\\n/g, '<br>')" />
           </div>
         </div>
       </div>
