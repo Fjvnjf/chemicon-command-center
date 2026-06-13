@@ -31,7 +31,7 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-import { BRIDGE_URL } from '../bridge-config'
+const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
 
 async function sendMessage() {
   const text = input.value.trim()
