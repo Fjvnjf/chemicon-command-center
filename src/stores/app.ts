@@ -9,6 +9,15 @@ export interface ChatInsight {
   routeName: string
 }
 
+export interface Briefing {
+  id: number
+  time: string
+  category: 'market' | 'competitor' | 'investment' | 'general'
+  question: string
+  summary: string
+  routeName: string
+}
+
 const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
 
 export const useAppStore = defineStore('app', () => {
@@ -25,6 +34,7 @@ export const useAppStore = defineStore('app', () => {
 
   // Chat-to-tab intelligence feed
   const chatInsights = ref<ChatInsight[]>([])
+  const briefings = ref<Briefing[]>([])
   let insightCounter = 0
 
   function addChatInsight(topic: string, category: ChatInsight['category'], routeName: string) {
@@ -40,6 +50,30 @@ export const useAppStore = defineStore('app', () => {
     if (chatInsights.value.length > 20) {
       chatInsights.value = chatInsights.value.slice(0, 20)
     }
+  }
+
+  function addBriefing(question: string, summary: string, category: Briefing['category'], routeName: string) {
+    insightCounter++
+    const b: Briefing = {
+      id: insightCounter,
+      time: new Date().toLocaleTimeString(),
+      category,
+      question,
+      summary,
+      routeName,
+    }
+    briefings.value.unshift(b)
+    if (briefings.value.length > 30) {
+      briefings.value = briefings.value.slice(0, 30)
+    }
+  }
+
+  function getBriefingsByCategory(category: Briefing['category']) {
+    return briefings.value.filter(b => b.category === category)
+  }
+
+  function removeBriefing(id: number) {
+    briefings.value = briefings.value.filter(b => b.id !== id)
   }
 
   function getInsightsByCategory(category: ChatInsight['category']) {
@@ -111,6 +145,10 @@ export const useAppStore = defineStore('app', () => {
     chatInsights,
     addChatInsight,
     getInsightsByCategory,
+    briefings,
+    addBriefing,
+    getBriefingsByCategory,
+    removeBriefing,
     toggleSidebar,
     setTitle,
     usageLoading,

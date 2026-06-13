@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
+import type { Briefing } from '@/stores/app'
 
 interface MarketData {
   segment: string
@@ -42,6 +43,12 @@ const tradeData = ref([
 
 // Chat intelligence feed
 const chatInsights = computed(() => appStore.getInsightsByCategory('market'))
+const marketBriefings = computed(() => appStore.getBriefingsByCategory('market'))
+const expandedBriefing = ref<number | null>(null)
+
+function toggleBriefing(id: number) {
+  expandedBriefing.value = expandedBriefing.value === id ? null : id
+}
 
 const priorityBadge = (p: string) => p === 'High' ? 'badge-ok' : p === 'Medium' ? 'badge-warn' : 'badge-info'
 const fitBadge = (f: string) => f === 'Strong' ? 'badge-ok' : f === 'Moderate' ? 'badge-warn' : 'badge-info'
@@ -136,6 +143,27 @@ const fitBadge = (f: string) => f === 'Strong' ? 'badge-ok' : f === 'Moderate' ?
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dynamic Briefings from Chat -->
+    <div v-if="marketBriefings.length > 0" class="card">
+      <div class="card-header">
+        <h3>📝 Market Briefings from Chat</h3>
+        <span class="badge badge-ok">{{ marketBriefings.length }} briefing{{ marketBriefings.length > 1 ? 's' : '' }}</span>
+      </div>
+      <div class="briefing-list">
+        <div v-for="b in marketBriefings" :key="b.id" class="briefing-card" :class="{ expanded: expandedBriefing === b.id }">
+          <div class="briefing-header" @click="toggleBriefing(b.id)">
+            <span class="briefing-arrow">{{ expandedBriefing === b.id ? '▾' : '▸' }}</span>
+            <span class="briefing-time">{{ b.time }}</span>
+            <span class="briefing-question">{{ b.question.slice(0, 100) }}{{ b.question.length > 100 ? '...' : '' }}</span>
+            <button class="briefing-dismiss" @click.stop="appStore.removeBriefing(b.id)" title="Remove">×</button>
+          </div>
+          <div v-if="expandedBriefing === b.id" class="briefing-body">
+            <div class="briefing-summary" v-html="b.summary" />
+          </div>
         </div>
       </div>
     </div>
@@ -237,4 +265,28 @@ const fitBadge = (f: string) => f === 'Strong' ? 'badge-ok' : f === 'Moderate' ?
   color: $text-muted;
   font-size: 13px;
 }
+
+// ── Briefing cards ──
+.briefing-list { display: flex; flex-direction: column; gap: 8px; }
+.briefing-card {
+  border: 1px solid $border-color; border-radius: $radius-sm; overflow: hidden;
+  transition: border-color $transition-fast;
+  &:hover { border-color: rgba($accent-gold, 0.25); }
+  &.expanded { border-color: $accent-gold; }
+}
+.briefing-header {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  cursor: pointer; background: $bg-card-hover;
+  &:hover { background: rgba($accent-gold, 0.05); }
+}
+.briefing-arrow { color: $accent-gold; font-size: 14px; min-width: 16px; }
+.briefing-time { font-size: 11px; color: $text-muted; font-family: $font-code; min-width: 85px; }
+.briefing-question { flex: 1; font-size: 13px; color: $text-primary; font-weight: 600; }
+.briefing-dismiss {
+  background: none; border: none; color: $text-muted; font-size: 18px;
+  cursor: pointer; padding: 0 4px; line-height: 1;
+  &:hover { color: $accent-red; }
+}
+.briefing-body { padding: 14px; border-top: 1px solid $border-color; background: rgba(0,0,0,0.15); }
+.briefing-summary { font-size: 13px; color: $text-secondary; line-height: 1.7; }
 </style>

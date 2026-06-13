@@ -80,6 +80,10 @@ async function sendMessage() {
       if (data.api_calls) {
         reply += `\n\n---\n*(${data.api_calls} API calls · ${data.model || 'agent'})*`
       }
+      // Save as briefing card for intelligence tabs
+      if (category !== 'general') {
+        appStore.addBriefing(text, data.response, category, routeName)
+      }
     } else if (data.ok && data.error) {
       reply = `⚠️ Agent error: ${data.error}\n\n*Bridge connected — API token may need refresh. The pipeline is live.*`
     } else {
