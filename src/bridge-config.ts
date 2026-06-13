@@ -1,3 +1,5 @@
 // Single source of truth for bridge URL
-// Updated by the watchdog script — do NOT hand-edit
-export const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
+// Auto-detects: relative on VPS (same-origin, no CORS), absolute on GitHub Pages
+export const BRIDGE_URL = typeof window !== 'undefined' && window.location.hostname.includes('github.io')
+  ? 'https://salon-brisbane-refused-tennis.trycloudflare.com'
+  : ''

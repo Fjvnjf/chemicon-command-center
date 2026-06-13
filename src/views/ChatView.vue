@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
 import { useAppStore, type ChatInsight } from '@/stores/app'
+import { BRIDGE_URL } from '../bridge-config'
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -31,7 +32,6 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
 
 async function sendMessage() {
   const text = input.value.trim()
