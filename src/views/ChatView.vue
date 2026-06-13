@@ -50,19 +50,19 @@ function sendMessage() {
     let category: ChatInsight['category'] = 'general'
     let routeName = 'chat'
 
-    // Route detection for tab routing
+    // Route detection for tab routing — check SPECIFIC categories first
     const lower = text.toLowerCase()
-    if (lower.includes('market') || lower.includes('industry') || lower.includes('pricing') || lower.includes('demand') || lower.includes('supply') || lower.includes('margin')) {
-      reply = '📈 **Market Analysis Detected** — routed to Market Analysis tab.\n\nI am analyzing market conditions for your query. The Market Analysis view will populate with structured data from this conversation.'
-      category = 'market'
-      routeName = 'marketAnalysis'
-    } else if (lower.includes('competitor') || lower.includes('rival') || lower.includes('comparison') || lower.includes('compare') || lower.includes(' vs ') || lower.includes('versus')) {
+    if (lower.includes('competitor') || lower.includes('competition') || lower.includes('rival') || lower.includes('comparison') || lower.includes('compare') || lower.includes(' vs ') || lower.includes('versus')) {
       reply = '⚔️ **Competitor Analysis Detected** — routed to Competitors tab.\n\nI am gathering competitor intelligence for your query. The Competitors view will update with battle cards and market share data.'
       category = 'competitor'
       routeName = 'competitors'
-    } else if (lower.includes('invest') || lower.includes('financial') || lower.includes('roi') || lower.includes('breakeven')) {
+    } else if (lower.includes('invest') || lower.includes('financial') || lower.includes('roi') || lower.includes('breakeven') || lower.includes('npv') || lower.includes('payback')) {
       reply = '💰 **Investment Analysis Detected** — routed to Market Analysis.\n\nI am building financial models for your query. Key metrics will appear in the Market Analysis view.'
       category = 'investment'
+      routeName = 'marketAnalysis'
+    } else if (lower.includes('market') || lower.includes('industry') || lower.includes('pricing') || lower.includes('demand') || lower.includes('supply') || lower.includes('margin')) {
+      reply = '📈 **Market Analysis Detected** — routed to Market Analysis tab.\n\nI am analyzing market conditions for your query. The Market Analysis view will populate with structured data from this conversation.'
+      category = 'market'
       routeName = 'marketAnalysis'
     }
 
