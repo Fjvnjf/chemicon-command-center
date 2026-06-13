@@ -20,7 +20,7 @@ const totalCount = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-const BRIDGE_URL = 'https://theater-ratios-cet-commission.trycloudflare.com'
+const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
 
 // Group skills by category
 const skillsByCategory = computed(() => {

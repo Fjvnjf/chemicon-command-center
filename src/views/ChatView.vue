@@ -31,7 +31,7 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-const BRIDGE_URL = 'https://theater-ratios-cet-commission.trycloudflare.com'
+const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
 
 async function sendMessage() {
   const text = input.value.trim()
@@ -67,7 +67,7 @@ async function sendMessage() {
   appStore.addChatInsight(text.slice(0, 80) + (text.length > 80 ? '...' : ''), category, routeName)
 
   try {
-    const resp = await fetch(`${BRIDGE_URL}/api/chat`, {
+    const resp = await fetch(`${BRIDGE_URL}/api/chemicon-chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: text }),
