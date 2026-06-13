@@ -1,0 +1,118 @@
+@use 'variables' as *;
+
+// ─── CSS Reset / Base ───
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: $font-sans;
+  background: $bg-root;
+  color: $text-primary;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: $accent-cyan;
+  text-decoration: none;
+
+  &:hover {
+    color: $accent-gold;
+  }
+}
+
+// ─── Scrollbar ───
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $border-color-light;
+  border-radius: 3px;
+
+  &:hover {
+    background: $text-muted;
+  }
+}
+
+// ─── NaiveUI overrides ───
+.n-card {
+  background: $bg-card !important;
+  border-color: $border-color !important;
+}
+
+.n-button {
+  font-family: $font-sans !important;
+}
+
+.n-data-table {
+  background: $bg-card !important;
+}
+
+.n-input {
+  background: $bg-input !important;
+}
+
+// ─── Utility ───
+.text-gold { color: $accent-gold; }
+.text-cyan { color: $accent-cyan; }
+.text-green { color: $accent-green; }
+.text-red { color: $accent-red; }
+.text-muted { color: $text-muted; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+
+  &.badge-ok { background: rgba($accent-green, 0.15); color: $accent-green; }
+  &.badge-warn { background: rgba($accent-orange, 0.15); color: $accent-orange; }
+  &.badge-danger { background: rgba($accent-red, 0.15); color: $accent-red; }
+  &.badge-info { background: rgba($accent-cyan, 0.15); color: $accent-cyan; }
+  &.badge-gold { background: rgba($accent-gold, 0.15); color: $accent-gold; }
+}
+
+// ─── Card ───
+.card {
+  background: $bg-card;
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  padding: 20px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid $border-color;
+
+  h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: $text-primary;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
