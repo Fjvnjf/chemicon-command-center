@@ -31,7 +31,7 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-const BRIDGE_URL = 'https://had-tender-computation-set.trycloudflare.com'
+const BRIDGE_URL = 'https://enzyme-delaware-katrina-eagle.trycloudflare.com'
 
 async function sendMessage() {
   const text = input.value.trim()
