@@ -31,7 +31,7 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-const BRIDGE_URL = 'https://theater-ratios-cet-commission.trycloudflare.com'
+import { BRIDGE_URL } from '../bridge-config'
 
 async function sendMessage() {
   const text = input.value.trim()

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
-const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
+import { BRIDGE_URL } from '../bridge-config'
 
 interface MemoryEntry {
   title: string

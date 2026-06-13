@@ -26,7 +26,7 @@ interface CronResponseJobs {
 
 type CronResponse = CronResponseOk | CronResponseJobs
 
-const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
+import { BRIDGE_URL } from '../bridge-config'
 
 const jobs = ref<CronJob[]>([])
 const loading = ref(true)

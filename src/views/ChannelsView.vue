@@ -10,7 +10,7 @@ interface PlatformsResponse {
   gateway_running: boolean
 }
 
-const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
+import { BRIDGE_URL } from '../bridge-config'
 
 const platforms = ref<PlatformInfo[]>([])
 const gatewayRunning = ref(false)

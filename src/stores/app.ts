@@ -18,7 +18,7 @@ export interface Briefing {
   routeName: string
 }
 
-const BRIDGE_URL = 'https://salon-brisbane-refused-tennis.trycloudflare.com'
+import { BRIDGE_URL } from '../bridge-config'
 
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
