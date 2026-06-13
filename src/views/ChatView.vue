@@ -30,7 +30,10 @@ function scrollToBottom() {
   })
 }
 
-function sendMessage() {
+// ── Bridge API ──
+const BRIDGE_URL = 'https://kept-capability-freight-accuracy.trycloudflare.com'
+
+async function sendMessage() {
   const text = input.value.trim()
   if (!text) return
 
@@ -44,39 +47,60 @@ function sendMessage() {
   sending.value = true
   scrollToBottom()
 
-  // Simulated response
-  setTimeout(() => {
-    let reply = 'I am processing your request. This is a simulated response — the full Hermes agent bridge will provide real AI responses.'
-    let category: ChatInsight['category'] = 'general'
-    let routeName = 'chat'
+  // Detect category for tab routing
+  const lower = text.toLowerCase()
+  let category: ChatInsight['category'] = 'general'
+  let routeName = 'chat'
 
-    // Route detection for tab routing — check SPECIFIC categories first
-    const lower = text.toLowerCase()
-    if (lower.includes('competitor') || lower.includes('competition') || lower.includes('rival') || lower.includes('comparison') || lower.includes('compare') || lower.includes(' vs ') || lower.includes('versus')) {
-      reply = '⚔️ **Competitor Analysis Detected** — routed to Competitors tab.\n\nI am gathering competitor intelligence for your query. The Competitors view will update with battle cards and market share data.'
-      category = 'competitor'
-      routeName = 'competitors'
-    } else if (lower.includes('invest') || lower.includes('financial') || lower.includes('roi') || lower.includes('breakeven') || lower.includes('npv') || lower.includes('payback')) {
-      reply = '💰 **Investment Analysis Detected** — routed to Market Analysis.\n\nI am building financial models for your query. Key metrics will appear in the Market Analysis view.'
-      category = 'investment'
-      routeName = 'marketAnalysis'
-    } else if (lower.includes('market') || lower.includes('industry') || lower.includes('pricing') || lower.includes('demand') || lower.includes('supply') || lower.includes('margin')) {
-      reply = '📈 **Market Analysis Detected** — routed to Market Analysis tab.\n\nI am analyzing market conditions for your query. The Market Analysis view will populate with structured data from this conversation.'
-      category = 'market'
-      routeName = 'marketAnalysis'
+  if (lower.includes('competitor') || lower.includes('competition') || lower.includes('rival') || lower.includes('comparison') || lower.includes('compare') || lower.includes(' vs ') || lower.includes('versus')) {
+    category = 'competitor'
+    routeName = 'competitors'
+  } else if (lower.includes('invest') || lower.includes('financial') || lower.includes('roi') || lower.includes('breakeven') || lower.includes('npv') || lower.includes('payback')) {
+    category = 'investment'
+    routeName = 'marketAnalysis'
+  } else if (lower.includes('market') || lower.includes('industry') || lower.includes('pricing') || lower.includes('demand') || lower.includes('supply') || lower.includes('margin')) {
+    category = 'market'
+    routeName = 'marketAnalysis'
+  }
+
+  // Push to shared store
+  appStore.addChatInsight(text.slice(0, 80) + (text.length > 80 ? '...' : ''), category, routeName)
+
+  try {
+    const resp = await fetch(`${BRIDGE_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text }),
+    })
+    const data = await resp.json()
+
+    let reply: string
+    if (data.ok && data.response) {
+      reply = data.response
+      if (data.api_calls) {
+        reply += `\n\n---\n*(${data.api_calls} API calls · ${data.model || 'agent'})*`
+      }
+    } else if (data.ok && data.error) {
+      reply = `⚠️ Agent error: ${data.error}\n\n*Bridge connected — API token may need refresh. The pipeline is live.*`
+    } else {
+      reply = `⚠️ Bridge error: ${data.error || 'Unknown'}`
     }
-
-    // Push to shared store so Market Analysis / Competitors tabs pick it up
-    appStore.addChatInsight(text.slice(0, 80) + (text.length > 80 ? '...' : ''), category, routeName)
 
     messages.value.push({
       role: 'assistant',
       content: reply,
       time: new Date().toLocaleTimeString(),
     })
+  } catch (err: any) {
+    messages.value.push({
+      role: 'assistant',
+      content: `🔌 Connection error: ${err.message || 'Bridge unreachable'}\n\nThe agent bridge at ${BRIDGE_URL} is not responding.`,
+      time: new Date().toLocaleTimeString(),
+    })
+  } finally {
     sending.value = false
     scrollToBottom()
-  }, 800)
+  }
 }
 
 function handleKeydown(e: KeyboardEvent) {
