@@ -18,7 +18,7 @@ export interface Briefing {
   routeName: string
 }
 
-const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
+const BRIDGE_URL = 'https://theater-ratios-cet-commission.trycloudflare.com'
 
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)

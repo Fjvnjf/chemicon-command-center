@@ -31,7 +31,7 @@ function scrollToBottom() {
 }
 
 // ── Bridge API ──
-const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
+const BRIDGE_URL = 'https://theater-ratios-cet-commission.trycloudflare.com'
 
 async function sendMessage() {
   const text = input.value.trim()

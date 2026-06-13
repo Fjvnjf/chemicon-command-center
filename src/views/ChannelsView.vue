@@ -10,7 +10,7 @@ interface PlatformsResponse {
   gateway_running: boolean
 }
 
-const BRIDGE_URL = 'https://households-brooks-combination-thumb.trycloudflare.com'
+const BRIDGE_URL = 'https://theater-ratios-cet-commission.trycloudflare.com'
 
 const platforms = ref<PlatformInfo[]>([])
 const gatewayRunning = ref(false)
