@@ -9,6 +9,8 @@ export interface ChatInsight {
   routeName: string
 }
 
+const BRIDGE_URL = 'https://enzyme-delaware-katrina-eagle.trycloudflare.com'
+
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
   const title = ref('CHEMICON COMMAND CENTER')
@@ -52,6 +54,51 @@ export const useAppStore = defineStore('app', () => {
     title.value = t
   }
 
+  // Bridge API integration
+  async function fetchStatus() {
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/hermes/status`)
+      if (!res.ok) return
+      const data = await res.json()
+      agentModel.value = data.model ?? data.agentModel ?? agentModel.value
+      agentStatus.value = (data.provider && data.model) ? 'online' : 'offline'
+      platformCount.value = data.platform_count ?? data.platformCount ?? platformCount.value
+    } catch {
+      // Swallow errors — keep existing defaults
+    }
+  }
+
+  const usageLoading = ref(false)
+  const usageError = ref<string | null>(null)
+
+  async function fetchUsage() {
+    usageLoading.value = true
+    usageError.value = null
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/hermes/usage`)
+      if (!res.ok) {
+        usageError.value = `HTTP ${res.status}`
+        return
+      }
+      const data = await res.json()
+      tokenCount.value = data.tokenCount ?? data.tokens ?? tokenCount.value
+      activeSessions.value = data.sessions ?? data.activeSessions ?? activeSessions.value
+    } catch (e: any) {
+      usageError.value = e?.message ?? 'Network error'
+    } finally {
+      usageLoading.value = false
+    }
+  }
+
+  async function fetchHealth() {
+    const res = await fetch(`${BRIDGE_URL}/api/hermes/health`)
+    if (!res.ok) throw new Error(`Health check failed: ${res.status}`)
+    return res.json()
+  }
+
+  // Auto-fetch status on store init
+  fetchStatus()
+
   return {
     sidebarCollapsed,
     title,
@@ -66,5 +113,10 @@ export const useAppStore = defineStore('app', () => {
     getInsightsByCategory,
     toggleSidebar,
     setTitle,
+    usageLoading,
+    usageError,
+    fetchStatus,
+    fetchUsage,
+    fetchHealth,
   }
 })
