@@ -45,7 +45,7 @@ function statusClass(status: string) {
       <div class="hero-icon">🧬</div>
       <div>
         <p class="eyebrow">EKKOLearnAI / Hermes Studio feature parity</p>
-        <h1>All EKKO Functions in Workshop</h1>
+        <h1>All EKKOL Functions in Workshop</h1>
         <p class="subtitle">
           This is the full upstream feature inventory mapped into the Chemicon Workshop UI. Items marked Partial or Staged are visible honestly; they are not claimed as fully wired until backend/API parity is tested live.
         </p>

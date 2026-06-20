@@ -99,7 +99,7 @@ export const ekkoFeatures: Record<string, EkkoFeature> = {
     capabilities: [
       { title: 'Cron management', detail: 'Create, edit, pause, resume, delete and run scheduled jobs.' },
       { title: 'Presets', detail: 'Reusable schedules and common watchdog patterns.' },
-      { title: 'Workshop audit', detail: 'Current EKKO audit watchdog checks build/live/API every 15 minutes.' },
+      { title: 'Workshop audit', detail: 'Current EKKOL audit watchdog checks build/live/API every 15 minutes.' },
     ],
   },
   kanban: {
