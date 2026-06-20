@@ -24,10 +24,20 @@ const router = createRouter({
     { path: '/skills', name: 'skills', component: () => import('@/views/SkillsView.vue') },
     { path: '/plugins', name: 'plugins', component: () => import('@/views/PluginsView.vue') },
     { path: '/group-chat', name: 'groupChat', component: () => import('@/views/GroupChatView.vue') },
+    { path: '/global-agent', name: 'globalAgent', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'globalAgent' } },
+    { path: '/kanban', name: 'kanban', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'kanban' } },
+    { path: '/coding-agents', name: 'codingAgents', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'codingAgents' } },
+    { path: '/mcp-manager', name: 'mcpManager', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'mcp' } },
+    { path: '/skills-usage', name: 'skillsUsage', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'skillsUsage' } },
 
     // ── OPERATIONS ──
     { path: '/jobs', name: 'jobs', component: () => import('@/views/JobsView.vue') },
     { path: '/channels', name: 'channels', component: () => import('@/views/ChannelsView.vue') },
+    { path: '/devices', name: 'devices', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'devices' } },
+    { path: '/version-preview', name: 'versionPreview', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'versionPreview' } },
+    { path: '/voice', name: 'voice', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'voice' } },
+    { path: '/voice-settings', name: 'voiceSettings', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'voiceSettings' } },
+    { path: '/auth-security', name: 'authSecurity', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'authSecurity' } },
     { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
 
     // ── SYSTEM ──

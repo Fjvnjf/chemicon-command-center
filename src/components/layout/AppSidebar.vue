@@ -60,6 +60,11 @@ const sections: SidebarSection[] = [
       { label: 'Skills', icon: '🛠', routeName: 'skills' },
       { label: 'Plugins', icon: '🔌', routeName: 'plugins' },
       { label: 'Group Chat', icon: '👥', routeName: 'groupChat' },
+      { label: 'Global Agent', icon: '🌐', routeName: 'globalAgent' },
+      { label: 'Kanban', icon: '📌', routeName: 'kanban' },
+      { label: 'Coding Agents', icon: '🧑‍💻', routeName: 'codingAgents' },
+      { label: 'MCP Manager', icon: '🔌', routeName: 'mcpManager' },
+      { label: 'Skills Usage', icon: '📈', routeName: 'skillsUsage' },
     ],
   },
   {
@@ -69,6 +74,11 @@ const sections: SidebarSection[] = [
     items: [
       { label: 'Jobs', icon: '⏰', routeName: 'jobs' },
       { label: 'Channels', icon: '📡', routeName: 'channels' },
+      { label: 'Devices', icon: '📱', routeName: 'devices' },
+      { label: 'Version Preview', icon: '🧪', routeName: 'versionPreview' },
+      { label: 'Voice', icon: '🎙', routeName: 'voice' },
+      { label: 'Voice Settings', icon: '🔊', routeName: 'voiceSettings' },
+      { label: 'Auth & Security', icon: '🔐', routeName: 'authSecurity' },
       { label: 'Settings', icon: '⚙', routeName: 'settings' },
     ],
   },
