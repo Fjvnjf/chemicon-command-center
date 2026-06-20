@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
-import { useAppStore, type ChatInsight } from '@/stores/app'
+import { useAppStore } from '@/stores/app'
 import { BRIDGE_URL } from '../bridge-config'
+import { routeChatCommand, summarizeRouteTargets } from '@/utils/chatRouting'
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -47,24 +48,21 @@ async function sendMessage() {
   sending.value = true
   scrollToBottom()
 
-  // Detect category for tab routing
-  const lower = text.toLowerCase()
-  let category: ChatInsight['category'] = 'general'
-  let routeName = 'chat'
+  // Detect one or more dashboard sections for tab routing.
+  // Supports explicit commands like "@market", "@competitors", or "both sections".
+  const routeTargets = routeChatCommand(text)
+  const routedTo = summarizeRouteTargets(routeTargets)
 
-  if (lower.includes('competitor') || lower.includes('competition') || lower.includes('rival') || lower.includes('comparison') || lower.includes('compare') || lower.includes(' vs ') || lower.includes('versus')) {
-    category = 'competitor'
-    routeName = 'competitors'
-  } else if (lower.includes('invest') || lower.includes('financial') || lower.includes('roi') || lower.includes('breakeven') || lower.includes('npv') || lower.includes('payback')) {
-    category = 'investment'
-    routeName = 'marketAnalysis'
-  } else if (lower.includes('market') || lower.includes('industry') || lower.includes('pricing') || lower.includes('demand') || lower.includes('supply') || lower.includes('margin')) {
-    category = 'market'
-    routeName = 'marketAnalysis'
+  // Push to shared store immediately so the command appears in the relevant tab(s),
+  // even if the agent response is slow or the tunnel times out.
+  for (const target of routeTargets) {
+    appStore.addChatInsight(
+      text.slice(0, 100) + (text.length > 100 ? '...' : ''),
+      target.category,
+      target.routeName,
+      target.reason,
+    )
   }
-
-  // Push to shared store
-  appStore.addChatInsight(text.slice(0, 80) + (text.length > 80 ? '...' : ''), category, routeName)
 
   try {
     const resp = await fetch(`${BRIDGE_URL}/api/chemicon-chat`, {
@@ -80,9 +78,13 @@ async function sendMessage() {
       if (data.api_calls) {
         reply += `\n\n---\n*(${data.api_calls} API calls · ${data.model || 'agent'})*`
       }
-      // Save as briefing card for intelligence tabs
-      if (category !== 'general') {
-        appStore.addBriefing(text, data.response, category, routeName)
+      // Save as briefing card for every matched intelligence tab.
+      const intelligenceTargets = routeTargets.filter(target => target.category !== 'general')
+      for (const target of intelligenceTargets) {
+        appStore.addBriefing(text, data.response, target.category, target.routeName)
+      }
+      if (intelligenceTargets.length > 0) {
+        reply += `\n\n---\n*Saved to: ${routedTo}*`
       }
     } else if (data.ok && data.error) {
       reply = `⚠️ Agent error: ${data.error}\n\n*Bridge connected — API token may need refresh. The pipeline is live.*`

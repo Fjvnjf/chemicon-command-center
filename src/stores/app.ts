@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export interface ChatInsight {
   id: number
@@ -7,6 +7,7 @@ export interface ChatInsight {
   topic: string
   category: 'market' | 'competitor' | 'investment' | 'general'
   routeName: string
+  reason?: string
 }
 
 export interface Briefing {
@@ -19,6 +20,30 @@ export interface Briefing {
 }
 
 import { BRIDGE_URL } from '../bridge-config'
+
+const CHAT_INSIGHTS_STORAGE_KEY = 'chemicon.chatInsights.v2'
+const BRIEFINGS_STORAGE_KEY = 'chemicon.briefings.v2'
+
+function loadStoredArray<T>(key: string): T[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveStoredArray<T>(key: string, value: T[]) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignore quota/private-browser failures; the live in-memory dashboard still works.
+  }
+}
 
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
@@ -33,11 +58,18 @@ export const useAppStore = defineStore('app', () => {
   const activeSessions = ref(1)
 
   // Chat-to-tab intelligence feed
-  const chatInsights = ref<ChatInsight[]>([])
-  const briefings = ref<Briefing[]>([])
-  let insightCounter = 0
+  const chatInsights = ref<ChatInsight[]>(loadStoredArray<ChatInsight>(CHAT_INSIGHTS_STORAGE_KEY))
+  const briefings = ref<Briefing[]>(loadStoredArray<Briefing>(BRIEFINGS_STORAGE_KEY))
+  let insightCounter = Math.max(
+    0,
+    ...chatInsights.value.map(i => i.id || 0),
+    ...briefings.value.map(b => b.id || 0),
+  )
 
-  function addChatInsight(topic: string, category: ChatInsight['category'], routeName: string) {
+  watch(chatInsights, value => saveStoredArray(CHAT_INSIGHTS_STORAGE_KEY, value), { deep: true })
+  watch(briefings, value => saveStoredArray(BRIEFINGS_STORAGE_KEY, value), { deep: true })
+
+  function addChatInsight(topic: string, category: ChatInsight['category'], routeName: string, reason?: string) {
     insightCounter++
     chatInsights.value.unshift({
       id: insightCounter,
@@ -45,6 +77,7 @@ export const useAppStore = defineStore('app', () => {
       topic,
       category,
       routeName,
+      reason,
     })
     // Keep max 20 insights
     if (chatInsights.value.length > 20) {
