@@ -40,6 +40,7 @@ const sections: SidebarSection[] = [
       { label: 'Projects', icon: '📁', routeName: 'projects' },
       { label: 'Files', icon: '📂', routeName: 'files' },
       { label: 'Terminal', icon: '🖥', routeName: 'terminal' },
+      { label: 'EKKO Functions', icon: '🧬', routeName: 'ekkoFunctions' },
     ],
   },
   {

@@ -48,6 +48,22 @@ const statusClass = computed(() => {
       </article>
     </section>
 
+    <section class="grid">
+      <article class="card">
+        <h2>Upstream routes</h2>
+        <ul>
+          <li v-for="upstreamRoute in feature.upstreamRoutes" :key="upstreamRoute"><code>{{ upstreamRoute }}</code></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Upstream views/files</h2>
+        <ul>
+          <li v-for="view in feature.upstreamViews" :key="view"><code>{{ view }}</code></li>
+        </ul>
+      </article>
+    </section>
+
     <section class="card">
       <h2>Capability map</h2>
       <div class="capability-list">
