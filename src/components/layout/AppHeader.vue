@@ -18,7 +18,7 @@ const pageTitle = computed(() => {
     projects: 'Projects',
     files: 'Files',
     terminal: 'Terminal',
-    ekkoFunctions: 'EKKOL Functions',
+    ekkoFunctions: 'EKKO Functions',
     ekkoChatSessions: 'Agent Chat & Sessions',
     marketAnalysis: 'Market Analysis',
     competitors: 'Competitors',
