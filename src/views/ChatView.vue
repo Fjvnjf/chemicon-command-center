@@ -176,7 +176,8 @@ const activeModelLabel = computed(() => selectedModel.value || currentModel.valu
 const activeProviderLabel = computed(() => selectedProvider.value || currentModel.value?.provider || 'provider')
 const isGithubPages = computed(() => typeof window !== 'undefined' && window.location.hostname.includes('github.io'))
 const bridgeStatusLabel = computed(() => {
-  if (currentModel.value) return 'Bridge connected'
+  if (currentModel.value) return isGithubPages.value ? 'GitHub + live bridge' : 'Bridge connected'
+  if (isGithubPages.value && BRIDGE_URL) return 'Checking GitHub bridge'
   if (isGithubPages.value && !BRIDGE_URL) return 'GitHub static backup'
   if (modelLoadError.value) return 'Bridge offline'
   return 'Checking bridge'
@@ -277,12 +278,31 @@ function buildOutgoingMessage(text: string): string {
   return `${text}${attachmentNote}`
 }
 
+type JsonResponse<T> = T
+
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<JsonResponse<T>> {
+  const resp = await fetch(url, options)
+  const text = await resp.text()
+  const contentType = resp.headers.get('content-type') || ''
+  if (!resp.ok) {
+    const preview = text.replace(/\s+/g, ' ').slice(0, 180)
+    throw new Error(`HTTP ${resp.status}: ${resp.statusText}${preview ? ` — ${preview}` : ''}`)
+  }
+  if (!contentType.includes('application/json')) {
+    const preview = text.replace(/\s+/g, ' ').slice(0, 180)
+    throw new Error(`Expected JSON from bridge but received ${contentType || 'unknown content type'}${preview ? ` — ${preview}` : ''}`)
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch (error: any) {
+    throw new Error(`Invalid JSON from bridge: ${error.message || error}`)
+  }
+}
+
 async function fetchModels() {
   modelLoadError.value = null
   try {
-    const resp = await fetch(`${BRIDGE_URL}/api/hermes/models`)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
-    const data: ModelsResponse = await resp.json()
+    const data = await fetchJson<ModelsResponse>(`${BRIDGE_URL}/api/hermes/models`)
     currentModel.value = data.current ?? null
     availableModels.value = data.available ?? []
     providersWithKeys.value = data.providers_with_keys ?? []
@@ -341,7 +361,7 @@ async function sendMessage() {
   }
 
   try {
-    const resp = await fetch(`${BRIDGE_URL}/api/chemicon-chat`, {
+    const data = await fetchJson<any>(`${BRIDGE_URL}/api/chemicon-chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -354,7 +374,6 @@ async function sendMessage() {
         instructions: buildInstructions(),
       }),
     })
-    const data = await resp.json()
 
     let reply: string
     if (data.ok && data.response) {
@@ -537,7 +556,8 @@ onMounted(() => {
           <div>
             <strong>Model selection</strong>
             <p>Current bridge model: {{ currentModel?.provider || 'unknown' }} / {{ currentModel?.model || 'unknown' }}</p>
-            <p v-if="isGithubPages && !BRIDGE_URL" class="text-gold">GitHub Pages is a durable static deployment. Live Hermes API replies require a stable HTTPS bridge configured in <code>localStorage.chemicon.bridgeUrl</code>; no Cloudflare tunnel is hard-coded.</p>
+            <p v-if="isGithubPages && BRIDGE_URL" class="text-gold">GitHub Pages is serving the dashboard. Live Hermes replies are sent to <code>{{ BRIDGE_URL }}</code>. You can replace it with a more stable HTTPS bridge by setting <code>localStorage.chemicon.bridgeUrl</code>.</p>
+            <p v-else-if="isGithubPages" class="text-gold">GitHub Pages is a durable static deployment. Live Hermes API replies require a stable HTTPS bridge configured in <code>localStorage.chemicon.bridgeUrl</code>.</p>
             <p v-if="modelLoadError" class="text-red">⚠️ {{ modelLoadError }}</p>
           </div>
           <button class="retry-btn" @click="fetchModels">Refresh models</button>
