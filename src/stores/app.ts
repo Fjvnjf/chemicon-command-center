@@ -194,8 +194,79 @@ function metricTone(label: string, value: string): VisualMetric['tone'] {
   return 'neutral'
 }
 
-function extractMetrics(question: string, summary: string): VisualMetric[] {
+function topicKeywords(question: string, summary = ''): string[] {
+  const stop = new Set(['chemicon', 'china', 'market', 'business', 'visual', 'card', 'give', 'make', 'show', 'please', 'short', 'quick', 'analysis', 'signal', 'risk', 'and', 'the', 'for', 'with', 'from', 'this', 'that', 'into'])
+  const words = stripMarkdown(`${question} ${summary}`)
+    .toLowerCase()
+    .match(/[a-z][a-z0-9-]{3,}|[\u4e00-\u9fff]{2,}/g) || []
+  const counts = new Map<string, number>()
+  words.forEach(word => {
+    if (!stop.has(word)) counts.set(word, (counts.get(word) || 0) + 1)
+  })
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([word]) => word).slice(0, 6)
+}
+
+function commandProfile(question: string, summary: string, category: BusinessCategory, visualType: VisualCardType) {
+  const text = `${question} ${summary}`.toLowerCase()
+  const keywords = topicKeywords(question, summary)
+  const topic = keywords.slice(0, 3).map(word => word.replace(/-/g, ' ')).join(' / ') || domainLabel(category, '')
+  if (/capex|capacity|plant|factory|investment|feasibility|roi|payback|opex|irr|npv/.test(text)) {
+    return {
+      topic,
+      metricLabels: ['Capacity target', 'CAPEX signal', 'Utilization gate', 'Payback watch', 'Decision quality', 'Evidence depth'],
+      segmentLabels: ['CAPEX pressure', 'Utilization risk', 'Customer validation', 'Permit/EHS readiness'],
+      matrixLabels: ['Capacity case', 'CAPEX exposure', 'Demand proof', 'EHS / permit', 'Decision gate'],
+      colors: ['#c9a84c', '#fb923c', '#4fc3f7', '#f87171'],
+    }
+  }
+  if (/supplier|vendor|source|rfq|procure|raw material|coa|tds|sds/.test(text) || visualType === 'Supplier') {
+    return {
+      topic,
+      metricLabels: ['Supplier fit', 'Price/MOQ signal', 'Document readiness', 'Lead-time risk', 'Sample gate', 'Negotiation leverage'],
+      segmentLabels: ['Supplier fit', 'Price risk', 'Document gap', 'Sample priority'],
+      matrixLabels: ['Supplier', 'Product fit', 'Documents', 'Commercial risk', 'Next RFQ'],
+      colors: ['#34d399', '#c9a84c', '#4fc3f7', '#fb923c'],
+    }
+  }
+  if (/competitor|compare|benchmark|versus|\bvs\b|alternative|rival/.test(text) || category === 'competitor') {
+    return {
+      topic,
+      metricLabels: ['Position gap', 'Attack angle', 'Price pressure', 'Quality proof', 'Switching barrier', 'Evidence depth'],
+      segmentLabels: ['Chemicon edge', 'Competitor strength', 'Switching friction', 'Proof gap'],
+      matrixLabels: ['Competitor', 'Chemicon edge', 'Weakness', 'Proof needed', 'Attack move'],
+      colors: ['#a78bfa', '#f87171', '#c9a84c', '#4fc3f7'],
+    }
+  }
+  if (/price|demand|segment|growth|cagr|share|forecast|customer|textile|auxiliary/.test(text) || category === 'market') {
+    return {
+      topic,
+      metricLabels: ['Demand signal', 'Growth/price clue', 'Segment pull', 'Customer proof', 'Evidence depth', 'Action window'],
+      segmentLabels: ['Demand pull', 'Price pressure', 'Segment fit', 'Evidence gap'],
+      matrixLabels: ['Demand', 'Price', 'Customer segment', 'Evidence', 'Market action'],
+      colors: ['#4fc3f7', '#34d399', '#c9a84c', '#fb923c'],
+    }
+  }
+  if (/should|decision|go\/no-go|recommend|priority|choose/.test(text) || visualType === 'Decision') {
+    return {
+      topic,
+      metricLabels: ['Decision lean', 'Upside', 'Downside', 'Evidence depth', 'Timing', 'Owner action'],
+      segmentLabels: ['Go signal', 'No-go risk', 'Evidence gap', 'Next action'],
+      matrixLabels: ['Option', 'Upside', 'Risk', 'Evidence', 'Decision'],
+      colors: ['#34d399', '#f87171', '#fb923c', '#c9a84c'],
+    }
+  }
+  return {
+    topic,
+    metricLabels: ['Main finding', 'Business impact', 'Evidence depth', 'Risk signal', 'Action window', 'Owner action'],
+    segmentLabels: ['Opportunity', 'Risk', 'Evidence gap', 'Actionability'],
+    matrixLabels: ['Finding', 'Implication', 'Risk', 'Evidence', 'Action'],
+    colors: ['#34d399', '#fb923c', '#f87171', '#c9a84c'],
+  }
+}
+
+function extractMetrics(question: string, summary: string, category: BusinessCategory, visualType: VisualCardType): VisualMetric[] {
   const text = stripMarkdown(`${question}. ${summary}`)
+  const profile = commandProfile(question, summary, category, visualType)
   const patterns = [
     /(?:US\$|USD|\$)\s?[\d,.]+\s?(?:B|M|K|bn|mn|million|billion)?/gi,
     /[\d,.]+\s?%/g,
@@ -209,55 +280,68 @@ function extractMetrics(question: string, summary: string): VisualMetric[] {
       if (!found.includes(value) && found.length < 6) found.push(value)
     }
   })
-  const labels = ['Value signal', 'Growth / share', 'Capacity / volume', 'Timeline', 'Cost / price', 'Scenario']
   const metrics = found.map((value, index) => ({
-    label: labels[index] || `Signal ${index + 1}`,
+    label: profile.metricLabels[index] || `Signal ${index + 1}`,
     value,
-    detail: 'Extracted from chat answer',
-    tone: metricTone(labels[index] || '', value),
+    detail: `${profile.topic} · extracted from answer`,
+    tone: metricTone(profile.metricLabels[index] || '', value),
   }))
   if (metrics.length) return metrics
-  return [
-    { label: 'Readability', value: 'Visual', detail: 'Converted from chat text', tone: 'opportunity' },
-    { label: 'Evidence', value: inferEvidenceStatus(summary), detail: 'Auto-classified', tone: inferEvidenceStatus(summary) === 'To Verify' ? 'warning' : 'neutral' },
-    { label: 'Action', value: '1 next step', detail: 'Human decision ready', tone: 'positive' },
+  const bullets = makeBullets(summary)
+  const fallbackValues = [
+    profile.topic || visualType,
+    bullets[0]?.slice(0, 38) || category,
+    inferEvidenceStatus(summary),
   ]
+  return fallbackValues.map((value, index) => ({
+    label: profile.metricLabels[index] || `Signal ${index + 1}`,
+    value,
+    detail: index === 2 ? 'Auto-classified evidence status' : 'Command-specific visual field',
+    tone: index === 2 && value === 'To Verify' ? 'warning' : metricTone(profile.metricLabels[index] || '', value),
+  }))
 }
 
-function makeChartSegments(summary: string, category: BusinessCategory, visualType: VisualCardType): ChartSegment[] {
-  const lowered = summary.toLowerCase()
-  const signals = [
-    { label: 'Opportunity', value: /opportunity|growth|profit|win|strong|advantage/.test(lowered) ? 42 : 25, color: '#34d399' },
-    { label: 'Risk', value: /risk|blocker|weak|hazard|unverified|to verify/.test(lowered) ? 34 : 18, color: '#fb923c' },
-    { label: 'Evidence gap', value: /to verify|assumption|unknown|not confirmed|needs/.test(lowered) ? 36 : 16, color: '#f87171' },
-    { label: category === 'competitor' ? 'Attack angle' : visualType === 'Scenario' ? 'Feasibility' : 'Actionability', value: 28, color: category === 'competitor' ? '#a78bfa' : '#c9a84c' },
-  ]
-  return signals.sort((a, b) => b.value - a.value).slice(0, 4)
+function commandScore(text: string, positive: RegExp, negative?: RegExp) {
+  let score = positive.test(text) ? 42 : 24
+  if (negative?.test(text)) score -= 10
+  return Math.max(8, Math.min(82, score))
 }
 
-function makeMatrixRows(bullets: string[], category: BusinessCategory, visualType: VisualCardType): MatrixRow[] {
+function makeChartSegments(question: string, summary: string, category: BusinessCategory, visualType: VisualCardType): ChartSegment[] {
+  const lowered = `${question} ${summary}`.toLowerCase()
+  const profile = commandProfile(question, summary, category, visualType)
+  const values = [
+    commandScore(lowered, /opportunity|growth|profit|win|strong|advantage|demand|go|fit|ready/, /weak|low|blocker/),
+    commandScore(lowered, /risk|blocker|weak|hazard|unverified|to verify|capex|permit|price pressure/, /verified|confirmed/),
+    commandScore(lowered, /verified|source|customer|rfq|sample|coa|tds|sds|evidence/, /unknown|unverified/),
+    commandScore(lowered, /next|action|decide|prepare|shortlist|validate|call|quote|scenario/, /wait|blocked/),
+  ]
+  return profile.segmentLabels.map((label, index) => ({
+    label,
+    value: values[index] || 20,
+    color: profile.colors[index % profile.colors.length],
+  })).sort((a, b) => b.value - a.value).slice(0, 4)
+}
+
+function makeMatrixRows(question: string, bullets: string[], category: BusinessCategory, visualType: VisualCardType): MatrixRow[] {
+  const profile = commandProfile(question, bullets.join(' '), category, visualType)
   const rows = bullets.slice(0, 5).map((bullet, index) => {
     const lowered = bullet.toLowerCase()
-    const tone: MatrixRow['tone'] = /risk|blocker|weak|hazard|problem|to verify/.test(lowered)
+    const tone: MatrixRow['tone'] = /risk|blocker|weak|hazard|problem|to verify|unverified/.test(lowered)
       ? 'danger'
-      : /opportunity|strong|advantage|growth|profit|win/.test(lowered)
+      : /opportunity|strong|advantage|growth|profit|win|ready|verified/.test(lowered)
         ? 'positive'
-        : /assumption|maybe|could|should|need/.test(lowered)
+        : /assumption|maybe|could|should|need|estimate|appears/.test(lowered)
           ? 'warning'
           : 'neutral'
-    const label = visualType === 'Matrix'
-      ? ['Position', 'Weakness', 'Attack angle', 'Evidence', 'Action'][index] || `Point ${index + 1}`
-      : category === 'market'
-        ? ['Demand', 'Price', 'Segment', 'Evidence', 'Action'][index] || `Signal ${index + 1}`
-        : ['Finding', 'Implication', 'Risk', 'Evidence', 'Action'][index] || `Point ${index + 1}`
     return {
-      label,
+      label: profile.matrixLabels[index] || `Point ${index + 1}`,
       value: bullet.slice(0, 180),
       status: tone === 'danger' ? 'Verify' : tone === 'positive' ? 'Useful' : 'Review',
       tone,
     }
   })
-  return rows.length ? rows : [{ label: 'Summary', value: 'No clean bullet structure found. Review original chat answer.', status: 'Review', tone: 'warning' }]
+  return rows.length ? rows : [{ label: profile.matrixLabels[0] || 'Summary', value: `${profile.topic}: no clean bullet structure found. Review original chat answer.`, status: 'Review', tone: 'warning' }]
 }
 
 function makeRiskItems(summary: string, evidenceStatus: EvidenceStatus, confidence: ConfidenceLevel): RiskItem[] {
@@ -322,9 +406,9 @@ function normalizeLegacyCard(card: Partial<BusinessVisualCard>): BusinessVisualC
       format: `${visualType} visual`,
       priority: confidence.includes('Critical') || category === 'investment' ? 'High' : 'Medium',
     },
-    metrics: card.metrics?.length ? card.metrics : extractMetrics(question, summaryText),
-    chartSegments: card.chartSegments?.length ? card.chartSegments : makeChartSegments(summaryText, category, visualType),
-    matrixRows: card.matrixRows?.length ? card.matrixRows : makeMatrixRows(bullets, category, visualType),
+    metrics: card.metrics?.length ? card.metrics : extractMetrics(question, summaryText, category, visualType),
+    chartSegments: card.chartSegments?.length ? card.chartSegments : makeChartSegments(question, summaryText, category, visualType),
+    matrixRows: card.matrixRows?.length ? card.matrixRows : makeMatrixRows(question, bullets, category, visualType),
     riskItems: card.riskItems?.length ? card.riskItems : makeRiskItems(summaryText, evidenceStatus, confidence),
   }
 }
