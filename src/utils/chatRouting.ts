@@ -124,7 +124,7 @@ export function routeChatCommand(text: string): ChatRouteTarget[] {
     })
   }
 
-  if (explicitBoth || explicitMarket || (!explicitBusiness && hasMarket && (!hasInvestment || hasStrongMarket))) {
+  if (explicitBoth || explicitMarket || (!explicitBusiness && !explicitCompetitor && hasMarket && (!hasInvestment || hasStrongMarket))) {
     addUnique(targets, {
       category: 'market',
       routeName: 'marketAnalysis',
