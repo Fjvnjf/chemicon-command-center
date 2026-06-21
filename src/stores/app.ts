@@ -1,11 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { BRIDGE_URL } from '../bridge-config'
+
+export type BusinessCategory = 'market' | 'competitor' | 'investment' | 'general'
+export type EvidenceStatus = 'Verified' | 'User Provided' | 'Assumption' | 'To Verify' | 'Mixed'
+export type ConfidenceLevel = '🟢 Higher' | '🟡 Medium' | '🟠 Low' | '🔴 Critical'
+export type VisualCardType = 'Executive' | 'KPI' | 'Scenario' | 'Matrix' | 'Risk' | 'Decision' | 'Supplier' | 'Chart'
 
 export interface ChatInsight {
   id: number
   time: string
   topic: string
-  category: 'market' | 'competitor' | 'investment' | 'general'
+  category: BusinessCategory
   routeName: string
   reason?: string
 }
@@ -13,16 +19,83 @@ export interface ChatInsight {
 export interface Briefing {
   id: number
   time: string
-  category: 'market' | 'competitor' | 'investment' | 'general'
+  category: BusinessCategory
   question: string
   summary: string
   routeName: string
 }
 
-import { BRIDGE_URL } from '../bridge-config'
+export interface VisualMetric {
+  label: string
+  value: string
+  detail?: string
+  tone?: 'positive' | 'warning' | 'danger' | 'neutral' | 'opportunity'
+}
+
+export interface ChartSegment {
+  label: string
+  value: number
+  color?: string
+}
+
+export interface MatrixRow {
+  label: string
+  value: string
+  status?: string
+  tone?: 'positive' | 'warning' | 'danger' | 'neutral'
+}
+
+export interface RiskItem {
+  risk: string
+  severity: 'Low' | 'Medium' | 'High' | 'Critical'
+  probability: 'Low' | 'Medium' | 'High'
+  mitigation: string
+}
+
+export interface BusinessVisualCard {
+  id: number
+  time: string
+  category: BusinessCategory
+  routeName: string
+  title: string
+  threadTitle: string
+  question: string
+  summary: string
+  bullets: string[]
+  evidenceStatus: EvidenceStatus
+  confidence: ConfidenceLevel
+  nextAction: string
+  visualType: VisualCardType
+  classification: {
+    domain: string
+    format: string
+    priority: 'High' | 'Medium' | 'Low'
+  }
+  metrics: VisualMetric[]
+  chartSegments: ChartSegment[]
+  matrixRows: MatrixRow[]
+  riskItems: RiskItem[]
+}
+
+export interface BusinessVisualCardPatch {
+  title?: string
+  threadTitle?: string
+  summary?: string
+  bullets?: string[]
+  evidenceStatus?: EvidenceStatus
+  confidence?: ConfidenceLevel
+  nextAction?: string
+  visualType?: VisualCardType
+  metrics?: VisualMetric[]
+  chartSegments?: ChartSegment[]
+  matrixRows?: MatrixRow[]
+  riskItems?: RiskItem[]
+}
 
 const CHAT_INSIGHTS_STORAGE_KEY = 'chemicon.chatInsights.v2'
 const BRIEFINGS_STORAGE_KEY = 'chemicon.briefings.v2'
+const BUSINESS_CARDS_STORAGE_KEY = 'chemicon.businessVisualCards.v2'
+const LEGACY_BUSINESS_CARDS_STORAGE_KEYS = ['chemicon.businessVisualCards.v1', 'chemicon-business-visual-cards', 'chemicon_business_cards']
 
 function loadStoredArray<T>(key: string): T[] {
   if (typeof localStorage === 'undefined') return []
@@ -45,6 +118,228 @@ function saveStoredArray<T>(key: string, value: T[]) {
   }
 }
 
+function stripMarkdown(text: string) {
+  return text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/[_#>*]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function firstSentence(text: string, fallback: string) {
+  const cleaned = stripMarkdown(text)
+  const sentence = cleaned.split(/(?<=[.!?])\s+/).find(line => line.length > 18)
+  return (sentence || fallback).slice(0, 280)
+}
+
+function inferEvidenceStatus(text: string): EvidenceStatus {
+  const lowered = text.toLowerCase()
+  if (lowered.includes('to verify') || lowered.includes('unverified') || lowered.includes('needs verification')) return 'To Verify'
+  if (lowered.includes('assumption') || lowered.includes('assume')) return 'Assumption'
+  if (lowered.includes('user provided')) return 'User Provided'
+  if (lowered.includes('verified') || lowered.includes('source-backed')) return 'Verified'
+  return 'Mixed'
+}
+
+function inferConfidence(text: string): ConfidenceLevel {
+  const lowered = text.toLowerCase()
+  if (lowered.includes('critical') || lowered.includes('blocker') || lowered.includes('high risk') || lowered.includes('do not proceed')) return '🔴 Critical'
+  if (lowered.includes('low confidence') || lowered.includes('weak evidence') || lowered.includes('to verify') || lowered.includes('unverified')) return '🟠 Low'
+  if (lowered.includes('verified') || lowered.includes('high confidence') || lowered.includes('confirmed')) return '🟢 Higher'
+  return '🟡 Medium'
+}
+
+function makeBullets(summary: string) {
+  const cleaned = stripMarkdown(summary)
+  const lineBullets = summary
+    .split(/\n+/)
+    .map(line => stripMarkdown(line.replace(/^[-*•\d.)\s]+/, '')))
+    .filter(line => line.length > 24 && !/^[-—]+$/.test(line))
+  if (lineBullets.length) return lineBullets.slice(0, 6)
+  return cleaned
+    .split(/(?<=[.!?])\s+/)
+    .map(line => line.trim())
+    .filter(line => line.length > 24)
+    .slice(0, 6)
+}
+
+function domainLabel(category: BusinessCategory, routeName: string) {
+  if (routeName === 'marketAnalysis' || category === 'market') return 'Market intelligence'
+  if (routeName === 'competitors' || category === 'competitor') return 'Competitor intelligence'
+  if (category === 'investment') return 'Investment / feasibility'
+  return 'Business command'
+}
+
+function inferVisualType(question: string, summary: string, category: BusinessCategory): VisualCardType {
+  const text = `${question} ${summary}`.toLowerCase()
+  if (/supplier|procure|rfq|raw material|vendor|source/.test(text)) return 'Supplier'
+  if (/risk|ehs|permit|regulatory|dms|toxic|hazard|blocker/.test(text)) return 'Risk'
+  if (/compare|competitor|versus| vs |benchmark|matrix/.test(text) || category === 'competitor') return 'Matrix'
+  if (/roi|irr|npv|payback|capex|opex|financial|investment|feasibility|scenario/.test(text)) return 'Scenario'
+  if (/market share|share|split|segment|pie|chart|graph|trend|growth|cagr/.test(text)) return 'Chart'
+  if (/should|go\/no-go|go no-go|decision|recommend/.test(text)) return 'Decision'
+  if (/\$|usd|%|mt|tons?|kg|cagr|revenue|margin|capacity/.test(text)) return 'KPI'
+  return 'Executive'
+}
+
+function metricTone(label: string, value: string): VisualMetric['tone'] {
+  const text = `${label} ${value}`.toLowerCase()
+  if (/risk|blocker|to verify|unverified|critical/.test(text)) return 'danger'
+  if (/cost|capex|opex|warning|low/.test(text)) return 'warning'
+  if (/growth|profit|margin|opportunity|revenue|saving|upside/.test(text)) return 'positive'
+  if (/market|capacity|demand|price|payback|roi/.test(text)) return 'opportunity'
+  return 'neutral'
+}
+
+function extractMetrics(question: string, summary: string): VisualMetric[] {
+  const text = stripMarkdown(`${question}. ${summary}`)
+  const patterns = [
+    /(?:US\$|USD|\$)\s?[\d,.]+\s?(?:B|M|K|bn|mn|million|billion)?/gi,
+    /[\d,.]+\s?%/g,
+    /[\d,.]+\s?(?:MT\/yr|mt\/yr|MT|mt|tons?|tonnes?|kg|kWh|m³|m3)/gi,
+    /[\d,.]+\s?(?:years?|months?)/gi,
+  ]
+  const found: string[] = []
+  patterns.forEach(pattern => {
+    for (const match of text.matchAll(pattern)) {
+      const value = match[0].trim()
+      if (!found.includes(value) && found.length < 6) found.push(value)
+    }
+  })
+  const labels = ['Value signal', 'Growth / share', 'Capacity / volume', 'Timeline', 'Cost / price', 'Scenario']
+  const metrics = found.map((value, index) => ({
+    label: labels[index] || `Signal ${index + 1}`,
+    value,
+    detail: 'Extracted from chat answer',
+    tone: metricTone(labels[index] || '', value),
+  }))
+  if (metrics.length) return metrics
+  return [
+    { label: 'Readability', value: 'Visual', detail: 'Converted from chat text', tone: 'opportunity' },
+    { label: 'Evidence', value: inferEvidenceStatus(summary), detail: 'Auto-classified', tone: inferEvidenceStatus(summary) === 'To Verify' ? 'warning' : 'neutral' },
+    { label: 'Action', value: '1 next step', detail: 'Human decision ready', tone: 'positive' },
+  ]
+}
+
+function makeChartSegments(summary: string, category: BusinessCategory, visualType: VisualCardType): ChartSegment[] {
+  const lowered = summary.toLowerCase()
+  const signals = [
+    { label: 'Opportunity', value: /opportunity|growth|profit|win|strong|advantage/.test(lowered) ? 42 : 25, color: '#34d399' },
+    { label: 'Risk', value: /risk|blocker|weak|hazard|unverified|to verify/.test(lowered) ? 34 : 18, color: '#fb923c' },
+    { label: 'Evidence gap', value: /to verify|assumption|unknown|not confirmed|needs/.test(lowered) ? 36 : 16, color: '#f87171' },
+    { label: category === 'competitor' ? 'Attack angle' : visualType === 'Scenario' ? 'Feasibility' : 'Actionability', value: 28, color: category === 'competitor' ? '#a78bfa' : '#c9a84c' },
+  ]
+  return signals.sort((a, b) => b.value - a.value).slice(0, 4)
+}
+
+function makeMatrixRows(bullets: string[], category: BusinessCategory, visualType: VisualCardType): MatrixRow[] {
+  const rows = bullets.slice(0, 5).map((bullet, index) => {
+    const lowered = bullet.toLowerCase()
+    const tone: MatrixRow['tone'] = /risk|blocker|weak|hazard|problem|to verify/.test(lowered)
+      ? 'danger'
+      : /opportunity|strong|advantage|growth|profit|win/.test(lowered)
+        ? 'positive'
+        : /assumption|maybe|could|should|need/.test(lowered)
+          ? 'warning'
+          : 'neutral'
+    const label = visualType === 'Matrix'
+      ? ['Position', 'Weakness', 'Attack angle', 'Evidence', 'Action'][index] || `Point ${index + 1}`
+      : category === 'market'
+        ? ['Demand', 'Price', 'Segment', 'Evidence', 'Action'][index] || `Signal ${index + 1}`
+        : ['Finding', 'Implication', 'Risk', 'Evidence', 'Action'][index] || `Point ${index + 1}`
+    return {
+      label,
+      value: bullet.slice(0, 180),
+      status: tone === 'danger' ? 'Verify' : tone === 'positive' ? 'Useful' : 'Review',
+      tone,
+    }
+  })
+  return rows.length ? rows : [{ label: 'Summary', value: 'No clean bullet structure found. Review original chat answer.', status: 'Review', tone: 'warning' }]
+}
+
+function makeRiskItems(summary: string, evidenceStatus: EvidenceStatus, confidence: ConfidenceLevel): RiskItem[] {
+  const bullets = makeBullets(summary)
+  const riskLines = bullets.filter(line => /risk|blocker|verify|unverified|assumption|hazard|permit|regulatory|weak|unknown|not confirmed/i.test(line))
+  const selected = (riskLines.length ? riskLines : bullets.slice(0, 2)).slice(0, 3)
+  return selected.map(line => {
+    const lowered = line.toLowerCase()
+    const severity: RiskItem['severity'] = confidence.includes('Critical') || /critical|blocker|hazard|toxic|permit/.test(lowered)
+      ? 'Critical'
+      : /risk|weak|unverified|to verify/.test(lowered)
+        ? 'High'
+        : evidenceStatus === 'Assumption' || evidenceStatus === 'To Verify'
+          ? 'Medium'
+          : 'Low'
+    return {
+      risk: line.slice(0, 90),
+      severity,
+      probability: severity === 'Critical' || severity === 'High' ? 'High' : severity === 'Medium' ? 'Medium' : 'Low',
+      mitigation: evidenceStatus === 'Verified'
+        ? 'Keep monitoring and attach source evidence to the card.'
+        : 'Confirm with source documents, RFQs, permits, customer samples, or vendor data before using in decisions.',
+    }
+  })
+}
+
+function makeNextAction(bullets: string[], visualType: VisualCardType, evidenceStatus: EvidenceStatus) {
+  const explicitAction = bullets.find(line => /next|action|verify|confirm|rfq|sample|call|prepare|compare|decide/i.test(line))
+  if (explicitAction) return explicitAction.slice(0, 150)
+  if (evidenceStatus === 'To Verify' || evidenceStatus === 'Assumption') return 'Verify the key assumptions with source documents, supplier RFQs, customer samples, or regulatory confirmation.'
+  if (visualType === 'Supplier') return 'Shortlist suppliers, request COA/TDS/SDS, confirm MOQ, price basis, lead time, and Incoterm.'
+  if (visualType === 'Scenario') return 'Convert this into base/upside/downside financial scenarios and confirm the decision gate.'
+  if (visualType === 'Matrix') return 'Use the matrix to select the strongest Chemicon attack angle and verify evidence gaps.'
+  return 'Review the visual card, confirm evidence status, and choose the next business action.'
+}
+
+function normalizeLegacyCard(card: Partial<BusinessVisualCard>): BusinessVisualCard {
+  const category = card.category || 'general'
+  const routeName = card.routeName || (category === 'market' ? 'marketAnalysis' : category === 'competitor' ? 'competitors' : 'businessCards')
+  const question = card.question || card.title || 'Business question'
+  const summaryText = card.summary || card.bullets?.join(' ') || 'Saved business answer.'
+  const bullets = card.bullets?.length ? card.bullets : makeBullets(summaryText)
+  const evidenceStatus = card.evidenceStatus || inferEvidenceStatus(summaryText)
+  const confidence = card.confidence || inferConfidence(summaryText)
+  const visualType = card.visualType || inferVisualType(question, summaryText, category)
+  return {
+    id: card.id || Date.now(),
+    time: card.time || new Date().toLocaleTimeString(),
+    category,
+    routeName,
+    title: card.title || question.replace(/[@/#]/g, '').trim().slice(0, 86) || 'Business intelligence card',
+    threadTitle: card.threadTitle || question.replace(/[@/#]/g, '').trim().slice(0, 72) || 'Command thread',
+    question,
+    summary: firstSentence(summaryText, 'Chat answer converted into a visual card.'),
+    bullets,
+    evidenceStatus,
+    confidence,
+    nextAction: card.nextAction || makeNextAction(bullets, visualType, evidenceStatus),
+    visualType,
+    classification: card.classification || {
+      domain: domainLabel(category, routeName),
+      format: `${visualType} visual`,
+      priority: confidence.includes('Critical') || category === 'investment' ? 'High' : 'Medium',
+    },
+    metrics: card.metrics?.length ? card.metrics : extractMetrics(question, summaryText),
+    chartSegments: card.chartSegments?.length ? card.chartSegments : makeChartSegments(summaryText, category, visualType),
+    matrixRows: card.matrixRows?.length ? card.matrixRows : makeMatrixRows(bullets, category, visualType),
+    riskItems: card.riskItems?.length ? card.riskItems : makeRiskItems(summaryText, evidenceStatus, confidence),
+  }
+}
+
+function loadBusinessCards() {
+  const current = loadStoredArray<Partial<BusinessVisualCard>>(BUSINESS_CARDS_STORAGE_KEY)
+  const legacy = LEGACY_BUSINESS_CARDS_STORAGE_KEYS.flatMap(key => loadStoredArray<Partial<BusinessVisualCard>>(key))
+  const deduped = new Map<number | string, BusinessVisualCard>()
+  ;[...current, ...legacy].forEach((card, index) => {
+    const normalized = normalizeLegacyCard(card)
+    deduped.set(card.id || `${normalized.question}-${index}`, normalized)
+  })
+  return Array.from(deduped.values()).sort((a, b) => b.id - a.id).slice(0, 60)
+}
+
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
   const title = ref('CHEMICON COMMAND CENTER')
@@ -60,14 +355,17 @@ export const useAppStore = defineStore('app', () => {
   // Chat-to-tab intelligence feed
   const chatInsights = ref<ChatInsight[]>(loadStoredArray<ChatInsight>(CHAT_INSIGHTS_STORAGE_KEY))
   const briefings = ref<Briefing[]>(loadStoredArray<Briefing>(BRIEFINGS_STORAGE_KEY))
+  const businessVisualCards = ref<BusinessVisualCard[]>(loadBusinessCards())
   let insightCounter = Math.max(
     0,
     ...chatInsights.value.map(i => i.id || 0),
     ...briefings.value.map(b => b.id || 0),
+    ...businessVisualCards.value.map(card => card.id || 0),
   )
 
   watch(chatInsights, value => saveStoredArray(CHAT_INSIGHTS_STORAGE_KEY, value), { deep: true })
   watch(briefings, value => saveStoredArray(BRIEFINGS_STORAGE_KEY, value), { deep: true })
+  watch(businessVisualCards, value => saveStoredArray(BUSINESS_CARDS_STORAGE_KEY, value), { deep: true, immediate: true })
 
   function addChatInsight(topic: string, category: ChatInsight['category'], routeName: string, reason?: string) {
     insightCounter++
@@ -101,6 +399,59 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  function addBusinessVisualCard(question: string, summary: string, category: BusinessVisualCard['category'], routeName: string, title?: string) {
+    insightCounter++
+    const bullets = makeBullets(summary)
+    const evidenceStatus = inferEvidenceStatus(summary)
+    const confidence = inferConfidence(summary)
+    const visualType = inferVisualType(question, summary, category)
+    const card = normalizeLegacyCard({
+      id: insightCounter,
+      time: new Date().toLocaleTimeString(),
+      category,
+      routeName,
+      title: title || question.replace(/[@/#]/g, '').trim().slice(0, 86) || 'Business intelligence card',
+      threadTitle: question.replace(/[@/#]/g, '').trim().slice(0, 72) || 'Command thread',
+      question,
+      summary,
+      bullets,
+      evidenceStatus,
+      confidence,
+      visualType,
+      nextAction: makeNextAction(bullets, visualType, evidenceStatus),
+    })
+    businessVisualCards.value.unshift(card)
+    if (businessVisualCards.value.length > 60) businessVisualCards.value = businessVisualCards.value.slice(0, 60)
+    return card
+  }
+
+  function updateBusinessVisualCard(id: number, patch: BusinessVisualCardPatch) {
+    const index = businessVisualCards.value.findIndex(card => card.id === id)
+    if (index === -1) return null
+    const current = businessVisualCards.value[index]
+    const summaryText = patch.summary || current.summary
+    const bullets = patch.bullets?.length ? patch.bullets : makeBullets(summaryText)
+    const evidenceStatus = patch.evidenceStatus || inferEvidenceStatus(summaryText)
+    const confidence = patch.confidence || inferConfidence(summaryText)
+    const visualType = patch.visualType || inferVisualType(current.question, summaryText, current.category)
+    const updated = normalizeLegacyCard({
+      ...current,
+      ...patch,
+      summary: summaryText,
+      bullets,
+      evidenceStatus,
+      confidence,
+      visualType,
+      nextAction: patch.nextAction || makeNextAction(bullets, visualType, evidenceStatus),
+      metrics: patch.metrics,
+      chartSegments: patch.chartSegments,
+      matrixRows: patch.matrixRows,
+      riskItems: patch.riskItems,
+    })
+    businessVisualCards.value[index] = updated
+    return updated
+  }
+
   function getBriefingsByCategory(category: Briefing['category']) {
     return briefings.value.filter(b => b.category === category)
   }
@@ -111,6 +462,14 @@ export const useAppStore = defineStore('app', () => {
 
   function getInsightsByCategory(category: ChatInsight['category']) {
     return chatInsights.value.filter(i => i.category === category)
+  }
+
+  function getBusinessCardsByCategory(category: BusinessVisualCard['category']) {
+    return businessVisualCards.value.filter(card => card.category === category || (category === 'general' && card.routeName === 'businessCards'))
+  }
+
+  function removeBusinessVisualCard(id: number) {
+    businessVisualCards.value = businessVisualCards.value.filter(card => card.id !== id)
   }
 
   function toggleSidebar() {
@@ -182,6 +541,11 @@ export const useAppStore = defineStore('app', () => {
     addBriefing,
     getBriefingsByCategory,
     removeBriefing,
+    businessVisualCards,
+    addBusinessVisualCard,
+    updateBusinessVisualCard,
+    getBusinessCardsByCategory,
+    removeBusinessVisualCard,
     toggleSidebar,
     setTitle,
     usageLoading,

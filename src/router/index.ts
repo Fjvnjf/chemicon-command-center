@@ -19,6 +19,7 @@ const router = createRouter({
     // ── INTELLIGENCE ──
     { path: '/market-analysis', name: 'marketAnalysis', component: () => import('@/views/MarketAnalysisView.vue') },
     { path: '/competitors', name: 'competitors', component: () => import('@/views/CompetitorsView.vue') },
+    { path: '/business-cards', name: 'businessCards', component: () => import('@/views/BusinessCardsView.vue') },
 
     // ── HERMES AGENT ──
     { path: '/ekko-chat-sessions', name: 'ekkoChatSessions', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'chatSessions' } },

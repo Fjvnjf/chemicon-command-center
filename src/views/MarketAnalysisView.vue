@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import VisualInsightCard from '@/components/business/VisualInsightCard.vue'
 import { useAppStore } from '@/stores/app'
 import type { Briefing } from '@/stores/app'
 
@@ -12,11 +13,20 @@ interface MarketData {
   priority: 'High' | 'Medium' | 'Low'
 }
 
+interface ResearchSignal {
+  topic: string
+  finding: string
+  implication: string
+  evidence: string
+  confidence: '🟢 Higher' | '🟡 Medium' | '🟠 Low'
+}
+
 const appStore = useAppStore()
 
 const marketSegments = ref<MarketData[]>([
   { segment: 'Textile Auxiliaries (China)', size: '$12.8B', growth: '6.2% CAGR', opportunity: 'Domestic softener demand growing 8%+', chemiconFit: 'Strong', priority: 'High' },
-  { segment: 'Esterquat (Global)', size: '$2.4B', growth: '7.8% CAGR', opportunity: 'Replacing DTDMAC, bio-based trend', chemiconFit: 'Strong', priority: 'High' },
+  { segment: 'Esterquat (Global)', size: 'Conflicting: $463M–$1.37B+', growth: '5.5–5.6% CAGR refs', opportunity: 'Fabric-care volume + biodegradable quat replacement', chemiconFit: 'Strong', priority: 'High' },
+  { segment: 'Asia Textile Chemicals', size: '$15.9B 2025 ref', growth: '6.0% CAGR ref', opportunity: 'Auxiliaries reported as largest product bucket; China/India/Bangladesh/Vietnam drive consumption', chemiconFit: 'Strong', priority: 'High' },
   { segment: 'Silicone Softeners', size: '$1.8B', growth: '5.4% CAGR', opportunity: 'Premium segment, high margin', chemiconFit: 'Moderate', priority: 'Medium' },
   { segment: 'Home Care Surfactants', size: '$4.2B', growth: '4.1% CAGR', opportunity: 'Adjacent market, cross-sell', chemiconFit: 'Moderate', priority: 'Medium' },
   { segment: 'SE Asia Textile Chemicals', size: '$3.6B', growth: '7.1% CAGR', opportunity: 'Export from China WFOE', chemiconFit: 'Emerging', priority: 'Low' },
@@ -32,6 +42,37 @@ const priceTrends = ref([
   { month: 'Jun', fattyAcid: 1380, esterquat: 2400 },
 ])
 
+const esterquatMarketSignals = ref<ResearchSignal[]>([
+  {
+    topic: 'Demand driver',
+    finding: 'Esterquats remain tied mainly to fabric softeners / conditioners, with textile softening auxiliaries as a secondary but relevant route.',
+    implication: 'Chemicon should treat CWAS/CWMS demand as real but specification-sensitive: customer sampling and TDS/SDS matching matter more than generic market size.',
+    evidence: 'MRFR lists fabric softeners, personal care and textile industry end-uses; ShengQing describes SQ-EQ90L as used in fabric softeners and textile softening auxiliaries.',
+    confidence: '🟡 Medium',
+  },
+  {
+    topic: 'Market-size conflict',
+    finding: 'Open market references disagree materially: MRFR says esterquat market was $1.373B in 2024; 24ChemicalResearch says esterquats were $463.1M in 2025.',
+    implication: 'Do not use a single esterquat TAM in investor slides until scope is reconciled: esterquat vs esterquats, fabric care only vs all applications, and regional split.',
+    evidence: 'MRFR Esterquat Market page, last updated Apr 6 2026; 24ChemicalResearch Global Esterquats Market 2025 page.',
+    confidence: '🟠 Low',
+  },
+  {
+    topic: 'China / Asia pull',
+    finding: 'Asia textile chemicals references show large, growing demand; FMI projects Asia textile chemicals from $15.912B in 2025 to $28.496B in 2035 at 6.0% CAGR.',
+    implication: 'China production can serve local textile finishing demand plus export customers, but Chemicon still needs customer validation by mill/application.',
+    evidence: 'Future Market Insights Asia Textile Chemicals Market page, updated Aug 20 2025.',
+    confidence: '🟡 Medium',
+  },
+  {
+    topic: 'Public pricing signal',
+    finding: 'Public China listings for esterquat CAS 91995-81-2 / TE90 show roughly US$2–5/kg (US$2,000–5,000/MT), but this is listing-level, not RFQ-grade pricing.',
+    implication: 'Use US$2,000–5,000/MT only as a watchlist band. Need RFQs by active matter, solvent/water basis, MOQ, Incoterm, packaging and COA/TDS/SDS.',
+    evidence: 'Hony Made-in-China listing for fabric softener esterquat CAS 91995-81-2 / Hony TE90.',
+    confidence: '🟠 Low',
+  },
+])
+
 // Import/Export analysis
 const tradeData = ref([
   { country: 'Bangladesh', imports: '125,000 mt', value: '$278M', growth: '+12%' },
@@ -44,6 +85,7 @@ const tradeData = ref([
 // Chat intelligence feed
 const chatInsights = computed(() => appStore.getInsightsByCategory('market'))
 const marketBriefings = computed(() => appStore.getBriefingsByCategory('market'))
+const marketVisualCards = computed(() => appStore.getBusinessCardsByCategory('market'))
 const expandedBriefing = ref<number | null>(null)
 
 function toggleBriefing(id: number) {
@@ -82,6 +124,36 @@ const fitBadge = (f: string) => f === 'Strong' ? 'badge-ok' : f === 'Moderate' ?
               <td>{{ row.opportunity }}</td>
               <td><span class="badge" :class="fitBadge(row.chemiconFit)">{{ row.chemiconFit }}</span></td>
               <td><span class="badge" :class="priorityBadge(row.priority)">{{ row.priority }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Esterquat Market Demand + Pricing Research -->
+    <div class="card">
+      <div class="card-header">
+        <h3>🧪 China Esterquat Demand & Pricing — Research Save</h3>
+        <span class="badge badge-warn">Review Required</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Topic</th>
+              <th>Finding</th>
+              <th>Chemicon Implication</th>
+              <th>Evidence / Source Basis</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in esterquatMarketSignals" :key="row.topic">
+              <td class="fw-600">{{ row.topic }}</td>
+              <td>{{ row.finding }}</td>
+              <td>{{ row.implication }}</td>
+              <td>{{ row.evidence }}</td>
+              <td>{{ row.confidence }}</td>
             </tr>
           </tbody>
         </table>
@@ -144,6 +216,24 @@ const fitBadge = (f: string) => f === 'Strong' ? 'badge-ok' : f === 'Moderate' ?
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- Market Visual Cards from Chat -->
+    <div v-if="marketVisualCards.length > 0" class="card vivid-section">
+      <div class="card-header">
+        <h3>📊 Market Visual Cards from Chat</h3>
+        <span class="badge badge-ok">{{ marketVisualCards.length }} visual card{{ marketVisualCards.length > 1 ? 's' : '' }}</span>
+      </div>
+      <div class="visual-card-grid vivid-grid">
+        <VisualInsightCard
+          v-for="card in marketVisualCards"
+          :key="card.id"
+          :card="card"
+          accent="cyan"
+          removable
+          @remove="appStore.removeBusinessVisualCard"
+        />
       </div>
     </div>
 
@@ -289,4 +379,6 @@ const fitBadge = (f: string) => f === 'Strong' ? 'badge-ok' : f === 'Moderate' ?
 }
 .briefing-body { padding: 14px; border-top: 1px solid $border-color; background: rgba(0,0,0,0.15); }
 .briefing-summary { font-size: 13px; color: $text-secondary; line-height: 1.7; }
+.visual-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+.vivid-section { background: radial-gradient(circle at top right, rgba($accent-cyan, .1), transparent 34%), $bg-card; }
 </style>

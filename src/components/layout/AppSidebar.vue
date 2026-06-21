@@ -50,6 +50,7 @@ const sections: SidebarSection[] = [
     items: [
       { label: 'Market Analysis', icon: '📈', routeName: 'marketAnalysis' },
       { label: 'Competitors', icon: '⚔️', routeName: 'competitors' },
+      { label: 'Business Cards', icon: '🧩', routeName: 'businessCards' },
     ],
   },
   {

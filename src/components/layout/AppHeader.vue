@@ -22,6 +22,7 @@ const pageTitle = computed(() => {
     ekkoChatSessions: 'Agent Chat & Sessions',
     marketAnalysis: 'Market Analysis',
     competitors: 'Competitors',
+    businessCards: 'Business Cards',
     memory: 'Agent Memory',
     skills: 'Skills Library',
     plugins: 'Plugins & MCP',

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import VisualInsightCard from '@/components/business/VisualInsightCard.vue'
 import { useAppStore } from '@/stores/app'
 import type { Briefing } from '@/stores/app'
 
@@ -12,6 +13,15 @@ interface CompetitorCard {
   weaknesses: string
   threatLevel: 'High' | 'Medium' | 'Low'
   marketShare: string
+}
+
+interface ComparisonRow {
+  area: string
+  Chemicon: string
+  Transfar: string
+  verdict: string
+  evidence: string
+  status: 'Verified/User Provided' | 'Reference Only' | 'To Verify'
 }
 
 const appStore = useAppStore()
@@ -40,12 +50,12 @@ const competitors = ref<CompetitorCard[]>([
   {
     company: 'Zhejiang Transfar',
     headquarters: 'China (Hangzhou)',
-    revenue: '$2.1B',
-    products: 'Full textile aux range, esterquats',
-    strengths: 'China distribution network, competitive pricing',
-    weaknesses: 'Quality inconsistency, limited export capability',
+    revenue: 'Large group; exact textile-chemical revenue To Verify',
+    products: 'Textile auxiliaries, quaternary ammonium salt series, synthetic ester series, softener-related leads',
+    strengths: 'China distribution, broad product lines, R&D/technical service, global expansion push',
+    weaknesses: 'Hard for Chemicon to beat on scale; public sources do not give esterquat price/share; may be bureaucratic for export custom service',
     threatLevel: 'High',
-    marketShare: '~15%',
+    marketShare: 'To Verify',
   },
   {
     company: 'Guangdong Demei',
@@ -79,9 +89,45 @@ const marketShareData = ref([
   { company: 'Others', share: 36 },
 ])
 
+const chemiconVsTransfar = ref<ComparisonRow[]>([
+  {
+    area: 'Scale and local presence',
+    Chemicon: 'User-provided: founded 2005, >200 dyeing customers globally; China WFOE reportedly established but factory/customer validation in China not yet secured.',
+    Transfar: 'Official Transfar page describes a textile chemicals division, China foothold and Asia/Africa/global expansion priorities.',
+    verdict: 'Transfar is the stronger China incumbent. Chemicon should not fight as a generic low-cost local supplier.',
+    evidence: 'Chemicon context from user memory; Transfar 2024 annual summary / 2025 mobilization news page.',
+    status: 'Verified/User Provided',
+  },
+  {
+    area: 'Product fit: esterquat / softener',
+    Chemicon: 'Target launch products: CWAS fatty acid ester quat 90%+ and CWMS fatty acid ester quat 70% (exact specs still need TDS/SDS/COA lock).',
+    Transfar: 'Public product navigation includes quaternary ammonium salt and synthetic ester series; textile chemicals division is active.',
+    verdict: 'Product overlap likely. Exact one-to-one equivalence is To Verify until TDS/SDS and customer use-case comparison.',
+    evidence: 'Chemicon user-provided product scope; Transfar official product/navigation text from ecotransfar page.',
+    status: 'To Verify',
+  },
+  {
+    area: 'Competitive advantage',
+    Chemicon: 'Can win on export responsiveness, Bangladesh/customer network, flexible sampling, and focused esterquat story if specs and RFQ economics are proven.',
+    Transfar: 'Wins on local China scale, technical team depth, domestic distribution and supplier/customer familiarity.',
+    verdict: 'Chemicon must enter with niche/export/customer-service angle, not commodity head-to-head volume war.',
+    evidence: 'Strategic assessment based on user-provided Chemicon position + Transfar public operating footprint.',
+    status: 'Reference Only',
+  },
+  {
+    area: 'Pricing reality',
+    Chemicon: 'No approved Chemicon China selling price yet. Planning must stay RFQ-gated by active matter, Incoterm, MOQ, packaging and documents.',
+    Transfar: 'No public Transfar esterquat price found in accessible official sources.',
+    verdict: 'Public China listing band for esterquat TE90 is roughly US$2,000–5,000/MT, but usable model input requires supplier/customer RFQs.',
+    evidence: 'Hony Made-in-China listing for CAS 91995-81-2 / Hony TE90 shows US$2–5/kg; low-confidence marketplace signal.',
+    status: 'To Verify',
+  },
+])
+
 // Chat intelligence — from shared store
 const chatInsights = computed(() => appStore.getInsightsByCategory('competitor'))
 const competitorBriefings = computed(() => appStore.getBriefingsByCategory('competitor'))
+const competitorVisualCards = computed(() => appStore.getBusinessCardsByCategory('competitor'))
 const expandedBriefing = ref<number | null>(null)
 
 function toggleBriefing(id: number) {
@@ -139,6 +185,56 @@ function threatBadge(level: string) {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Chemicon vs Transfar Research Save -->
+    <div class="card">
+      <div class="card-header">
+        <h3>🥊 Chemicon vs Transfar — Esterquat / Softener Positioning</h3>
+        <span class="badge badge-warn">Evidence Labeled</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Area</th>
+              <th>Chemicon</th>
+              <th>Transfar</th>
+              <th>Verdict</th>
+              <th>Evidence</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in chemiconVsTransfar" :key="row.area">
+              <td class="fw-600">{{ row.area }}</td>
+              <td>{{ row.Chemicon }}</td>
+              <td>{{ row.Transfar }}</td>
+              <td>{{ row.verdict }}</td>
+              <td>{{ row.evidence }}</td>
+              <td><span class="badge badge-info">{{ row.status }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Competitor Visual Cards from Chat -->
+    <div v-if="competitorVisualCards.length > 0" class="card vivid-section">
+      <div class="card-header">
+        <h3>⚔️ Competitor Visual Cards from Chat</h3>
+        <span class="badge badge-danger">{{ competitorVisualCards.length }} visual card{{ competitorVisualCards.length > 1 ? 's' : '' }}</span>
+      </div>
+      <div class="visual-card-grid vivid-grid">
+        <VisualInsightCard
+          v-for="card in competitorVisualCards"
+          :key="card.id"
+          :card="card"
+          accent="red"
+          removable
+          @remove="appStore.removeBusinessVisualCard"
+        />
       </div>
     </div>
 
@@ -217,6 +313,37 @@ function threatBadge(level: string) {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    color: $text-muted;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid $border-color;
+    background: rgba($border-color, 0.3);
+  }
+
+  td {
+    padding: 10px 12px;
+    color: $text-secondary;
+    border-bottom: 1px solid rgba($border-color, 0.5);
+    vertical-align: top;
+  }
+}
+
+.fw-600 { font-weight: 600; color: $text-primary; }
 
 .comp-card {
   background: $bg-card-hover;
@@ -470,4 +597,6 @@ function threatBadge(level: string) {
   color: $text-secondary;
   line-height: 1.7;
 }
+.visual-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+.vivid-section { background: radial-gradient(circle at top right, rgba($accent-red, .1), transparent 34%), $bg-card; }
 </style>

@@ -106,18 +106,34 @@ export function routeChatCommand(text: string): ChatRouteTarget[] {
 
   const explicitMarket = /(?:@market|#market|save\s+(?:to|in)\s+market|market\s+analysis)/i.test(normalized)
   const explicitCompetitor = /(?:@competitors?|#competitors?|save\s+(?:to|in)\s+competitors?|competitor\s+analysis)/i.test(normalized)
+  const explicitBusiness = /(?:@business|#business|business\s+cards?|save\s+(?:to|in)\s+business)/i.test(normalized)
   const explicitBoth = /(?:@both|#both|market\s+(?:and|&)\s+competitors?|competitors?\s+(?:and|&)\s+market|both\s+tabs|both\s+sections)/i.test(normalized)
 
-  if (explicitBoth || explicitMarket || matchesAny(normalized, marketPatterns)) {
+  const hasInvestment = matchesAny(normalized, investmentPatterns)
+  const hasCompetitor = matchesAny(normalized, competitorPatterns)
+  const hasMarket = matchesAny(normalized, marketPatterns)
+  const hasStrongMarket = matchesAny(normalized, marketPatterns.filter(pattern => !/china|bangladesh|textile|auxiliar|softener|esterquat|cwas|cwms/i.test(pattern.source)))
+  const slashCommandOnly = /^\s*\/(?:usage|status|goal)\b/i.test(normalized)
+
+  if (explicitBusiness) {
+    addUnique(targets, {
+      category: hasInvestment ? 'investment' : 'general',
+      routeName: 'businessCards',
+      label: 'Business Cards',
+      reason: 'explicit business card instruction',
+    })
+  }
+
+  if (explicitBoth || explicitMarket || (!explicitBusiness && hasMarket && (!hasInvestment || hasStrongMarket))) {
     addUnique(targets, {
       category: 'market',
       routeName: 'marketAnalysis',
       label: 'Market Analysis',
-      reason: explicitMarket || explicitBoth ? 'explicit market instruction' : 'market/business keywords',
+      reason: explicitMarket || explicitBoth ? 'explicit market instruction' : hasInvestment ? 'market-specific + investment keywords' : 'market/business keywords',
     })
   }
 
-  if (explicitBoth || explicitCompetitor || matchesAny(normalized, competitorPatterns)) {
+  if (explicitBoth || explicitCompetitor || (!explicitBusiness && hasCompetitor)) {
     addUnique(targets, {
       category: 'competitor',
       routeName: 'competitors',
@@ -126,23 +142,32 @@ export function routeChatCommand(text: string): ChatRouteTarget[] {
     })
   }
 
-  if (matchesAny(normalized, investmentPatterns)) {
+  if (hasInvestment && !targets.some(t => t.routeName === 'businessCards')) {
     addUnique(targets, {
       category: 'investment',
-      routeName: 'marketAnalysis',
-      label: 'Investment / Financial Analysis',
-      reason: 'investment/financial keywords',
+      routeName: 'businessCards',
+      label: 'Business Cards',
+      reason: 'investment/financial keywords need a dedicated visual card tab',
     })
   }
 
-  // If it is a business command but does not clearly match a section, keep it visible in Market Analysis
-  // instead of losing it in chat-only history.
+  // If it is a dashboard/business command but does not clearly match a specialist tab,
+  // route it to Business Cards so the user always sees a visible result instead of a hidden chat-only answer.
   if (targets.length === 0 && matchesAny(normalized, commandPatterns)) {
     addUnique(targets, {
-      category: 'market',
-      routeName: 'marketAnalysis',
-      label: 'Market Analysis',
-      reason: 'general business command fallback',
+      category: 'general',
+      routeName: 'businessCards',
+      label: 'Business Cards',
+      reason: 'general business command fallback / no existing section matched',
+    })
+  }
+
+  if (targets.length === 0 && !slashCommandOnly && normalized.length > 12) {
+    addUnique(targets, {
+      category: 'general',
+      routeName: 'businessCards',
+      label: 'Business Cards',
+      reason: 'default visual answer capture so every substantial chat message has a dashboard card',
     })
   }
 
@@ -151,7 +176,7 @@ export function routeChatCommand(text: string): ChatRouteTarget[] {
       category: 'general',
       routeName: 'chat',
       label: 'Chat only',
-      reason: 'no business section detected',
+      reason: 'status/slash command or no substantial dashboard content detected',
     })
   }
 
@@ -159,7 +184,7 @@ export function routeChatCommand(text: string): ChatRouteTarget[] {
 }
 
 export function summarizeRouteTargets(targets: ChatRouteTarget[]) {
-  const visible = targets.filter(t => t.category !== 'general')
+  const visible = targets.filter(t => t.routeName !== 'chat')
   if (visible.length === 0) return 'Chat only'
-  return visible.map(t => t.label).join(', ')
+  return [...new Set(visible.map(t => t.label))].join(', ')
 }
