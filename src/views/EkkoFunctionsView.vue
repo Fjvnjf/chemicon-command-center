@@ -55,6 +55,11 @@ function statusClass(status: string) {
           <span class="badge badge-info">{{ totals.partial }} partial</span>
           <span class="badge badge-warn">{{ totals.staged }} staged</span>
         </div>
+        <div class="control-strip" aria-label="EKKO access, control, manage, use surfaces">
+          <span>Use now: open any card below</span>
+          <span>Manage: review status and actions</span>
+          <span>Control: route live functions through Workshop pages</span>
+        </div>
       </div>
     </section>
 
@@ -76,6 +81,7 @@ function statusClass(status: string) {
           <span>{{ feature.upstreamViews.length }} views</span>
           <span>{{ feature.capabilities.length }} capabilities</span>
         </div>
+        <span class="open-link">Open in Workshop →</span>
       </RouterLink>
     </section>
   </div>
@@ -111,6 +117,9 @@ h2 { margin: 10px 0 8px; color: $text-primary; font-size: 16px; }
 .feature-card p { min-height: 68px; margin: 0 0 12px; font-size: 13px; }
 .meta-row { display: flex; flex-wrap: wrap; gap: 8px; color: $text-muted; font-size: 11px; }
 .meta-row span { border: 1px solid $border-color; border-radius: 999px; padding: 3px 8px; background: $bg-card-hover; }
+.control-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.control-strip span, .open-link { color: $accent-gold; font-size: 12px; font-weight: 800; }
+.open-link { display: inline-flex; margin-top: 12px; }
 @media (max-width: 1100px) { .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .feature-grid { grid-template-columns: 1fr; } .hero-card { flex-direction: column; } }
 </style>

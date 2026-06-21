@@ -28,6 +28,7 @@ const router = createRouter({
     { path: '/group-chat', name: 'groupChat', component: () => import('@/views/GroupChatView.vue') },
     { path: '/ekko-group-chat', name: 'ekkoGroupChat', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'groupChat' } },
     { path: '/global-agent', name: 'globalAgent', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'globalAgent' } },
+    { path: '/ekko-global-agent', name: 'ekkoGlobalAgent', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'globalAgent' } },
     { path: '/kanban', name: 'kanban', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'kanban' } },
     { path: '/coding-agents', name: 'codingAgents', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'codingAgents' } },
     { path: '/mcp-manager', name: 'mcpManager', component: () => import('@/views/EkkoFeatureView.vue'), meta: { featureKey: 'runtimeAdmin' } },

@@ -28,6 +28,7 @@ const statusClass = computed(() => {
         <div class="badges">
           <span class="badge" :class="statusClass">{{ feature.status }}</span>
           <span class="badge badge-info">Workshop route active</span>
+          <span class="badge badge-muted">Workshop status: {{ feature.status }}</span>
           <span v-if="feature.endpoint" class="badge badge-muted">{{ feature.endpoint }}</span>
         </div>
       </div>
@@ -41,11 +42,29 @@ const statusClass = computed(() => {
       </article>
 
       <article class="card">
-        <h2>Next Hermes actions</h2>
+        <h2>Next integration actions</h2>
         <ul>
           <li v-for="action in feature.actions" :key="action">{{ action }}</li>
         </ul>
       </article>
+    </section>
+
+    <section class="card control-card">
+      <h2>Access, control, manage, use</h2>
+      <div class="control-grid">
+        <div>
+          <strong>Use now</strong>
+          <span>Open in Workshop from the buttons below. Live and Partial items route to existing Workshop pages or the same-origin bridge.</span>
+        </div>
+        <div>
+          <strong>Manage</strong>
+          <span>Review status, upstream routes, capability map, and Next integration actions before wiring backend parity.</span>
+        </div>
+        <div>
+          <strong>Control</strong>
+          <span>Live controls stay inside Workshop routes; Staged controls remain visible but non-fake until backend/API parity is verified.</span>
+        </div>
+      </div>
     </section>
 
     <section class="grid">
@@ -78,6 +97,7 @@ const statusClass = computed(() => {
       <h2>Integration discipline</h2>
       <p>No fake live backend is claimed here. If a capability is not wired yet, it stays marked as staged until tested against Workshop's live same-origin deployment.</p>
       <div class="quick-links">
+        <RouterLink :to="{ name: 'ekkoFunctions' }">Open in Workshop</RouterLink>
         <RouterLink :to="{ name: 'chat' }">Open Chat</RouterLink>
         <RouterLink :to="{ name: 'settings' }">Open Settings</RouterLink>
         <RouterLink :to="{ name: 'performance' }">Open Health</RouterLink>
@@ -127,8 +147,13 @@ ul { padding-left: 18px; margin: 0; }
 .capability strong { color: $accent-gold; }
 .capability span { color: $text-secondary; font-size: 13px; line-height: 1.45; }
 .warning-card { border-color: rgba($accent-orange, .35); }
+.control-card { border-color: rgba($accent-cyan, .28); }
+.control-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.control-grid div { padding: 14px; border: 1px solid $border-color; border-radius: 12px; background: $bg-card-hover; display: flex; flex-direction: column; gap: 6px; }
+.control-grid strong { color: $accent-gold; }
+.control-grid span { color: $text-secondary; font-size: 13px; line-height: 1.45; }
 .quick-links { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .quick-links a { color: $accent-cyan; font-weight: 700; text-decoration: none; }
 .quick-links a:hover { text-decoration: underline; }
-@media (max-width: 900px) { .grid, .capability-list { grid-template-columns: 1fr; } .hero-card { flex-direction: column; } }
+@media (max-width: 900px) { .grid, .capability-list, .control-grid { grid-template-columns: 1fr; } .hero-card { flex-direction: column; } }
 </style>
