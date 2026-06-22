@@ -190,14 +190,15 @@ const providerChoices = computed(() => Array.from(new Set([
 const activeModelLabel = computed(() => selectedModel.value || currentModel.value?.model || 'Loading model…')
 const activeProviderLabel = computed(() => selectedProvider.value || currentModel.value?.provider || 'provider')
 const isGithubPages = computed(() => typeof window !== 'undefined' && window.location.hostname.includes('github.io'))
+const isGithubStaticBackup = computed(() => isGithubPages.value && !BRIDGE_URL)
 const bridgeStatusLabel = computed(() => {
+  if (isGithubStaticBackup.value) return 'GitHub static backup'
   if (currentModel.value) return isGithubPages.value ? 'GitHub + live bridge' : 'Bridge connected'
   if (isGithubPages.value && BRIDGE_URL) return 'Checking GitHub bridge'
-  if (isGithubPages.value && !BRIDGE_URL) return 'GitHub static backup'
   if (modelLoadError.value) return 'Bridge offline'
   return 'Checking bridge'
 })
-const bridgeStatusClass = computed(() => currentModel.value ? 'badge-ok' : 'badge-warn')
+const bridgeStatusClass = computed(() => currentModel.value && !isGithubStaticBackup.value ? 'badge-ok' : 'badge-warn')
 
 function featureBadgeClass(status: ChatFeatureStatus) {
   if (status === 'Live') return 'badge-ok'
@@ -511,6 +512,15 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<JsonRes
 
 async function fetchModels() {
   modelLoadError.value = null
+  if (isGithubStaticBackup.value) {
+    currentModel.value = null
+    availableModels.value = []
+    providersWithKeys.value = []
+    if (!selectedModel.value) selectedModel.value = 'gpt-5.5'
+    if (!selectedProvider.value) selectedProvider.value = 'openai-codex'
+    modelLoadError.value = 'GitHub Pages is running as a static dashboard. No Cloudflare bridge is configured.'
+    return
+  }
   try {
     const data = await fetchJson<ModelsResponse>(`${BRIDGE_URL}/api/hermes/models`)
     currentModel.value = data.current ?? null
@@ -577,6 +587,28 @@ async function sendMessage() {
     scrollToBottom()
   }
 
+  if (isGithubStaticBackup.value) {
+    const staticDetail = 'GitHub Pages static mode: no Cloudflare tunnel is used. The command and routed visual cards were saved locally in this browser; live Hermes execution requires a stable HTTPS API bridge configured later.'
+    addActivity('bridge', 'done', 'GitHub static backup', 'Skipped live bridge call by design — no Cloudflare URL is configured or used.')
+    addActivity('card', 'done', 'Visual cards captured locally', `Saved to ${routedTo}. Cards can be opened in the routed dashboard tab.`)
+    addActivity('result', 'done', 'Static capture complete', staticDetail)
+    pendingCards.forEach(item => appStore.updateBusinessVisualCard(item.cardId, {
+      title: `GitHub static capture: ${item.target.label} · ${outgoingText.slice(0, 42)}`,
+      summary: `${staticDetail} Original request: ${outgoingText}`,
+      evidenceStatus: 'To Verify',
+      confidence: '🟡 Medium',
+      nextAction: 'Use the saved visual card as a work item, or configure a stable non-Cloudflare HTTPS bridge in localStorage.chemicon.bridgeUrl when live Hermes execution is needed.',
+    }))
+    messages.value.push({
+      role: 'assistant',
+      content: `✅ **GitHub static capture complete**\n\nNo Cloudflare bridge was called. Your request was saved in this browser and routed visual cards were captured in: ${routedTo}.\n\nGitHub Pages can host the dashboard UI, but it cannot run the Hermes agent/API by itself. For now this GitHub deployment will keep the dashboard and visual-card routing stable without showing a broken Cloudflare connection.`,
+      time: new Date().toLocaleTimeString(),
+    })
+    sending.value = false
+    scrollToBottom()
+    return
+  }
+
   const bridgeActivityId = addActivity('bridge', 'running', 'Calling Hermes bridge', `${BRIDGE_URL || 'same-origin'}/api/chemicon-chat · model ${activeProviderLabel.value}/${activeModelLabel.value}`)
   const reasoningActivityId = addActivity('reasoning', 'running', 'Hermes is working', 'Waiting for final response. If Hermes searches the web or runs terminal/tools, returned tool calls will appear here.')
   const waitActivityIds: string[] = []
@@ -584,7 +616,7 @@ async function sendMessage() {
     waitActivityIds.push(addActivity('tool', 'running', 'Still waiting for Hermes', 'Longer tasks may include research, browser, file, or terminal work behind the bridge.'))
   }, 7000))
   progressTimers.push(window.setTimeout(() => {
-    waitActivityIds.push(addActivity('bridge', 'running', 'Bridge request still open', 'Cloudflare/GitHub bridge is still waiting for Hermes. Routed visual work items are already saved.'))
+    waitActivityIds.push(addActivity('bridge', 'running', 'Bridge request still open', 'Configured bridge is still waiting for Hermes. Routed visual work items are already saved.'))
   }, 16000))
 
   try {
@@ -676,11 +708,11 @@ async function sendMessage() {
       summary: `The question was captured and routed to ${item.target.label}, but the browser could not reach the bridge: ${err.message || 'Bridge unreachable'}. This saved work item prevents the request from disappearing; retry once the connection is healthy.`,
       evidenceStatus: 'To Verify',
       confidence: '🔴 Critical',
-      nextAction: 'Verify same-origin tunnel/API connectivity, then resend the chat command.',
+      nextAction: 'Verify same-origin or stable HTTPS API connectivity, then resend the chat command.',
     }))
     messages.value.push({
       role: 'assistant',
-      content: `🔌 Connection error: ${err.message || 'Bridge unreachable'}\n\nThe agent bridge at ${BRIDGE_URL} is not responding. Your routed visual cards were still captured in: ${routedTo}.`,
+      content: `🔌 Connection error: ${err.message || 'Bridge unreachable'}\n\nThe configured agent bridge at ${BRIDGE_URL || 'same-origin /api'} is not responding. Your routed visual cards were still captured in: ${routedTo}.`,
       time: new Date().toLocaleTimeString(),
     })
   } finally {
