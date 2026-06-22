@@ -474,7 +474,7 @@ function buildInstructions(): string {
     `Chemicon Workshop AI tab controls selected by user: mode=${selectedMode.value} (${modeDetail}); reasoning=${selectedReasoning.value} (${reasoningDetail}); requested_provider=${activeProviderLabel.value}; requested_model=${activeModelLabel.value}.`,
     visualResearch.value ? 'For every substantial user message, first understand the real work requested, research/think through the answer, then choose the best presentation format for the result: table for comparisons/country lists, matrix for competitors/decisions, pie chart for share/split/mix, line/trend graph for growth/forecast over time, bar chart for rankings/scores, KPI tiles for numeric business signals, risk register for hazards/permits/EHS, supplier scorecard for sourcing, or executive card for qualitative strategy.' : '',
     'For Chemicon business questions, do NOT answer as a wall of text. Do real research/reasoning first, then produce a lucrative executive answer with actual data/signals and evidence labels. The dashboard card must not be a fixed template: every KPI, matrix row, chart segment, risk, and next action should come from the research answer or explicitly be marked To Verify/Assumption. Route market topics to Market Analysis, competitor topics to Competitors, and unrelated/general business topics to Business Cards.',
-    'At the END of every business/dashboard answer, include a fenced JSON block labeled VISUAL_CARD_JSON. The JSON must have this shape: {"title":"...","summary":"...","visualType":"Executive|KPI|Scenario|Matrix|Risk|Decision|Supplier|Chart|Table|Pie|Bar|Line","evidenceStatus":"Verified|User Provided|Assumption|To Verify|Mixed","confidence":"🟢 Higher|🟡 Medium|🟠 Low|🔴 Critical","metrics":[{"label":"...","value":"...","detail":"...","tone":"positive|warning|danger|neutral|opportunity"}],"chartSegments":[{"label":"...","value":42,"color":"#4fc3f7"}],"matrixRows":[{"label":"...","value":"...","status":"...","tone":"positive|warning|danger|neutral"}],"riskItems":[{"risk":"...","severity":"Low|Medium|High|Critical","probability":"Low|Medium|High","mitigation":"..."}],"nextAction":"..."}. Use specific figures, source names, dates, suppliers, countries, prices, capacities, percentages, or document gaps wherever available; never fill generic placeholders.',
+    'At the END of every business/dashboard answer, include a fenced JSON block labeled VISUAL_CARD_JSON. The JSON must have this shape: {"title":"...","summary":"...","visualType":"Executive|KPI|Scenario|Matrix|Risk|Decision|Supplier|Chart|Table|Pie|Bar|Line","evidenceStatus":"Verified|User Provided|Assumption|To Verify|Mixed","confidence":"🟢 Higher|🟡 Medium|🟠 Low|🔴 Critical","metrics":[{"label":"...","value":"...","detail":"...","tone":"positive|warning|danger|neutral|opportunity"}],"chartSegments":[{"label":"...","value":67,"color":"#4fc3f7"}],"matrixRows":[{"label":"...","value":"...","status":"...","tone":"positive|warning|danger|neutral"}],"riskItems":[{"risk":"...","severity":"Low|Medium|High|Critical","probability":"Low|Medium|High","mitigation":"..."}],"nextAction":"..."}. Replace every example value with figures derived from the research answer, source names, dates, suppliers, countries, prices, capacities, percentages, or document gaps wherever available; never fill generic placeholders.',
     sourceBacked.value ? 'Separate claims into Verified / User Provided / Assumption / To Verify. Do not present unverified market, regulatory, customer, or supplier data as fact.' : '',
     toolTrace.value ? 'Expose tool/API-call summary when available, including web search, browser, terminal, file, and bridge steps. If tools were used, summarize what was called and why.' : 'Keep tool-call details minimized unless needed.',
     selectedReasoning.value === 'high' ? 'Use deeper feasibility reasoning and call out weaknesses bluntly.' : '',
@@ -545,7 +545,7 @@ async function sendMessage() {
   const intelligenceTargets = routeTargets.filter(target => target.routeName !== 'chat')
   addActivity('route', 'done', 'Command classified', `Targets: ${routedTo}. Route count: ${routeTargets.length}.`)
   const cardActivityId = intelligenceTargets.length
-    ? addActivity('card', 'running', 'Visual card placeholders created', `Preparing ${intelligenceTargets.length} routed dashboard card(s).`)
+    ? addActivity('card', 'running', 'Routed visual work items created', `Preparing ${intelligenceTargets.length} routed dashboard card(s) for hydration from the Hermes research response.`)
     : ''
 
   for (const target of routeTargets) {
@@ -584,7 +584,7 @@ async function sendMessage() {
     waitActivityIds.push(addActivity('tool', 'running', 'Still waiting for Hermes', 'Longer tasks may include research, browser, file, or terminal work behind the bridge.'))
   }, 7000))
   progressTimers.push(window.setTimeout(() => {
-    waitActivityIds.push(addActivity('bridge', 'running', 'Bridge request still open', 'Cloudflare/GitHub bridge is still waiting for Hermes. Visual placeholders are already saved.'))
+    waitActivityIds.push(addActivity('bridge', 'running', 'Bridge request still open', 'Cloudflare/GitHub bridge is still waiting for Hermes. Routed visual work items are already saved.'))
   }, 16000))
 
   try {
@@ -667,13 +667,13 @@ async function sendMessage() {
   } catch (err: any) {
     progressTimers.forEach(timer => window.clearTimeout(timer))
     waitActivityIds.forEach(id => updateActivity(id, 'error', 'The bridge failed before Hermes returned a final response.'))
-    if (cardActivityId) updateActivity(cardActivityId, 'error', 'The placeholder card is still saved, but final update failed because the bridge request failed.')
+    if (cardActivityId) updateActivity(cardActivityId, 'error', 'The routed visual work item is still saved, but final hydration failed because the bridge request failed.')
     updateActivity(bridgeActivityId, 'error', err.message || 'Bridge unreachable')
     updateActivity(reasoningActivityId, 'error', 'Hermes did not return a completed response through the browser bridge.')
     addActivity('result', 'error', 'Request failed visibly', `The routed card remains saved. Error: ${err.message || 'Bridge unreachable'}`)
     pendingCards.forEach(item => appStore.updateBusinessVisualCard(item.cardId, {
       title: `Connection issue: ${item.target.label} · ${outgoingText.slice(0, 42)}`,
-      summary: `The question was captured and routed to ${item.target.label}, but the browser could not reach the bridge: ${err.message || 'Bridge unreachable'}. This placeholder card prevents the work from disappearing; retry once the connection is healthy.`,
+      summary: `The question was captured and routed to ${item.target.label}, but the browser could not reach the bridge: ${err.message || 'Bridge unreachable'}. This saved work item prevents the request from disappearing; retry once the connection is healthy.`,
       evidenceStatus: 'To Verify',
       confidence: '🔴 Critical',
       nextAction: 'Verify same-origin tunnel/API connectivity, then resend the chat command.',

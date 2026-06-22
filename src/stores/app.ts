@@ -362,9 +362,12 @@ function extractMetrics(question: string, summary: string, category: BusinessCat
 }
 
 function commandScore(text: string, positive: RegExp, negative?: RegExp) {
-  let score = positive.test(text) ? 42 : 24
-  if (negative?.test(text)) score -= 10
-  return Math.max(8, Math.min(82, score))
+  const positiveMatches = text.match(new RegExp(positive.source, positive.flags.includes('g') ? positive.flags : `${positive.flags}g`))?.length || 0
+  const negativeMatches = negative ? (text.match(new RegExp(negative.source, negative.flags.includes('g') ? negative.flags : `${negative.flags}g`))?.length || 0) : 0
+  const numericSignals = text.match(/(?:US\$|USD|\$)?\s?[\d,.]+\s?(?:%|B|M|K|bn|mn|million|billion|MT\/yr|tons?|tonnes?|kg|months?|years?)?/gi)?.length || 0
+  const evidenceSignals = text.match(/verified|source|rfq|sample|quote|permit|customer|supplier|report|filing/gi)?.length || 0
+  const score = 18 + (positiveMatches * 14) + (numericSignals * 5) + (evidenceSignals * 4) - (negativeMatches * 9)
+  return Math.max(8, Math.min(92, score))
 }
 
 function makeChartSegments(question: string, summary: string, category: BusinessCategory, visualType: VisualCardType): ChartSegment[] {
