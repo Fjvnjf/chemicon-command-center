@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
+
 const appStore = useAppStore()
 
 // Additional stats from bridge that may not be in the store yet
@@ -16,7 +18,7 @@ async function loadUsage() {
   // Optionally do a direct fetch for any extra fields the bridge returns
   // that aren't mapped to store properties
   try {
-    const res = await fetch('/api/hermes/usage')
+    const res = await fetch(`${BRIDGE_URL}/api/hermes/usage`, { headers: BRIDGE_FETCH_HEADERS })
     if (res.ok) {
       const data = await res.json()
       // Collect any numeric fields beyond tokenCount/tokens and sessions/activeSessions

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
+
 interface Session {
   id: string
   file?: string
@@ -18,7 +20,7 @@ async function fetchSessions() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch('/api/hermes/sessions')
+    const res = await fetch(`${BRIDGE_URL}/api/hermes/sessions`, { headers: BRIDGE_FETCH_HEADERS })
     if (!res.ok) {
       error.value = `HTTP ${res.status}: ${res.statusText}`
       return

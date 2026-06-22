@@ -1,7 +1,7 @@
 # EKKO → Chemicon Workshop Extensive Integration Audit
 
 Last audited: 2026-06-21
-Live target: `https://nutten-even-hide-pupils.trycloudflare.com/chemicon/`
+Live target: `https://fjvnjf.github.io/chemicon-command-center/` via non-Cloudflare bridge `https://tough-panther-41.loca.lt`
 Source repo: `/home/ubuntu/chemicondb`
 Upstream source: `EKKOLearnAI/hermes-studio` local extraction at `/tmp/ekko-hermes-feature-extract/hermes-studio`, commit `4c4625e`
 
