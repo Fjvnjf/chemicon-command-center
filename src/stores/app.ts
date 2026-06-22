@@ -233,7 +233,8 @@ function commandProfile(question: string, summary: string, category: BusinessCat
   const text = `${question} ${summary}`.toLowerCase()
   const keywords = topicKeywords(question, summary)
   const topic = keywords.slice(0, 3).map(word => word.replace(/-/g, ' ')).join(' / ') || domainLabel(category, '')
-  if (visualType === 'Pie' || /pie|share split|market split|portfolio split|mix\b|percentage split/.test(text)) {
+  const explicitChartType = ['Pie', 'Line', 'Bar', 'Table'].includes(visualType)
+  if (visualType === 'Pie' || (!explicitChartType && /pie|share split|market split|portfolio split|mix\b|percentage split/.test(text))) {
     return {
       topic,
       metricLabels: ['Main slice', 'Second slice', 'Evidence depth', 'Unverified share', 'Decision signal', 'Next data point'],
@@ -242,7 +243,7 @@ function commandProfile(question: string, summary: string, category: BusinessCat
       colors: ['#c9a84c', '#4fc3f7', '#34d399', '#fb923c'],
     }
   }
-  if (visualType === 'Line' || /line chart|trend graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(text)) {
+  if (visualType === 'Line' || (!explicitChartType && /line chart|trend graph|line graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(text))) {
     return {
       topic,
       metricLabels: ['Trend direction', 'Growth clue', 'Inflection point', 'Forecast risk', 'Evidence depth', 'Next datapoint'],
@@ -251,7 +252,7 @@ function commandProfile(question: string, summary: string, category: BusinessCat
       colors: ['#4fc3f7', '#34d399', '#c9a84c', '#f87171'],
     }
   }
-  if (visualType === 'Bar' || /bar chart|rank|ranking|top \d+|compare bars|histogram/.test(text)) {
+  if (visualType === 'Bar' || (!explicitChartType && /bar chart|rank|ranking|top \d+|compare bars|histogram/.test(text))) {
     return {
       topic,
       metricLabels: ['Top factor', 'Runner-up', 'Score basis', 'Evidence depth', 'Gap', 'Next check'],
@@ -260,7 +261,7 @@ function commandProfile(question: string, summary: string, category: BusinessCat
       colors: ['#34d399', '#4fc3f7', '#c9a84c', '#fb923c'],
     }
   }
-  if (visualType === 'Table' || /country|countries|region|table|tabular|column|spreadsheet/.test(text)) {
+  if (visualType === 'Table' || (!explicitChartType && /country|countries|region|table|tabular|column|spreadsheet/.test(text))) {
     return {
       topic,
       metricLabels: ['Best-fit table', 'Rows to compare', 'Evidence depth', 'Data gaps', 'Decision column', 'Next research'],
