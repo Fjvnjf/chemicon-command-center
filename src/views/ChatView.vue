@@ -263,8 +263,8 @@ function buildInstructions(): string {
   const reasoningDetail = reasoningOptions.find(option => option.value === selectedReasoning.value)?.detail || ''
   return [
     `Chemicon Workshop AI tab controls selected by user: mode=${selectedMode.value} (${modeDetail}); reasoning=${selectedReasoning.value} (${reasoningDetail}); requested_provider=${activeProviderLabel.value}; requested_model=${activeModelLabel.value}.`,
-    visualResearch.value ? 'Use visual research style when useful: KPI tables, comparison matrices, chart-ready numeric data, risk registers, supplier scorecards, and structured bullets.' : '',
-    'For Chemicon business questions, do NOT answer as a wall of text. Structure the answer so the dashboard can create vivid visual cards: short title, executive summary, KPI/value signals, classification, matrix rows, risk items, evidence status, confidence, and next action. Route market topics to Market Analysis, competitor topics to Competitors, and unrelated business topics to Business Cards.',
+    visualResearch.value ? 'For every substantial user message, first understand the real work requested, research/think through the answer, then choose the best presentation format for the result: table for comparisons/country lists, matrix for competitors/decisions, pie chart for share/split/mix, line/trend graph for growth/forecast over time, bar chart for rankings/scores, KPI tiles for numeric business signals, risk register for hazards/permits/EHS, supplier scorecard for sourcing, or executive card for qualitative strategy.' : '',
+    'For Chemicon business questions, do NOT answer as a wall of text. Structure the answer so the dashboard can create vivid visual cards in the related tab: include a short title, executive summary, recommended visual format, KPI/value signals, table/matrix rows where useful, chart-ready numeric signals where useful, risk items, evidence status, confidence, and next action. Route market topics to Market Analysis, competitor topics to Competitors, and unrelated/general business topics to Business Cards.',
     sourceBacked.value ? 'Separate claims into Verified / User Provided / Assumption / To Verify. Do not present unverified market, regulatory, customer, or supplier data as fact.' : '',
     toolTrace.value ? 'Expose tool/API-call summary when available.' : 'Keep tool-call details minimized unless needed.',
     selectedReasoning.value === 'high' ? 'Use deeper feasibility reasoning and call out weaknesses bluntly.' : '',
@@ -343,7 +343,7 @@ async function sendMessage() {
   const pendingCards = intelligenceTargets.map(target => {
     const card = appStore.addBusinessVisualCard(
       outgoingText,
-      `⏳ Working on this command with ${selectedReasoningLabel.value} reasoning. The chat reply will update this visual card with KPI signals, risk lights, matrix rows, evidence status, and next action as soon as Hermes returns the answer. Routed because: ${target.reason}.`,
+      `⏳ Working on this command with ${selectedReasoningLabel.value} reasoning. I am choosing the best visual presentation for this specific request — table, matrix, pie, trend graph, bar chart, KPI tiles, risk register, supplier scorecard, or executive card — then the chat reply will update this routed card with evidence status and next action. Routed because: ${target.reason}.`,
       target.category,
       target.routeName,
       `Working: ${target.label} · ${outgoingText.slice(0, 44)}`,
@@ -354,7 +354,7 @@ async function sendMessage() {
   if (intelligenceTargets.length > 0) {
     messages.value.push({
       role: 'assistant',
-      content: `📌 **Routing & visual work started**\n- Chat reply: in this session\n- Visual cards: ${pendingCards.map(item => `${item.target.label} #${item.cardId}`).join(', ')}\n- Saved to: ${routedTo}\n\nI will update those cards with the final answer instead of leaving your question as plain text.`,
+      content: `📌 **Routing & adaptive visual work started**\n- I understood this as: ${outgoingText.slice(0, 120)}${outgoingText.length > 120 ? '…' : ''}\n- Chat reply: in this session\n- Visual cards: ${pendingCards.map(item => `${item.target.label} #${item.cardId}`).join(', ')}\n- Saved to: ${routedTo}\n\nI will choose the best format for the result — table, matrix, graph, chart, pie, KPI card, risk board, or supplier scorecard — and update the related tab instead of leaving it as plain text.`,
       time: new Date().toLocaleTimeString(),
     })
     scrollToBottom()
@@ -395,7 +395,7 @@ async function sendMessage() {
         cardLinks.push(`${item.target.label} visual card #${updated?.id || item.cardId}`)
       }
       if (intelligenceTargets.length > 0) {
-        reply += `\n\n---\n**Visual cards updated**\n${cardLinks.map(link => `- ${link}`).join('\n')}\n\n*Saved to: ${routedTo}. Open the matching dashboard tab to see KPI tiles, chart signals, risk lights, matrix rows, and next action.*`
+        reply += `\n\n---\n**Visual cards updated**\n${cardLinks.map(link => `- ${link}`).join('\n')}\n\n*Saved to: ${routedTo}. Open the matching dashboard tab to see the best-fit presentation for your command: table/matrix, chart/graph/pie, KPI tiles, risk lights, evidence status, and next action.*`
       }
     } else if (data.ok && data.error) {
       reply = `⚠️ Agent error: ${data.error}\n\n*Bridge connected — API token may need refresh. The pipeline is live.*`

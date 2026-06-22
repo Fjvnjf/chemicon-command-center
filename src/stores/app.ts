@@ -5,7 +5,7 @@ import { BRIDGE_URL } from '../bridge-config'
 export type BusinessCategory = 'market' | 'competitor' | 'investment' | 'general'
 export type EvidenceStatus = 'Verified' | 'User Provided' | 'Assumption' | 'To Verify' | 'Mixed'
 export type ConfidenceLevel = '🟢 Higher' | '🟡 Medium' | '🟠 Low' | '🔴 Critical'
-export type VisualCardType = 'Executive' | 'KPI' | 'Scenario' | 'Matrix' | 'Risk' | 'Decision' | 'Supplier' | 'Chart'
+export type VisualCardType = 'Executive' | 'KPI' | 'Scenario' | 'Matrix' | 'Risk' | 'Decision' | 'Supplier' | 'Chart' | 'Table' | 'Pie' | 'Bar' | 'Line'
 
 export interface ChatInsight {
   id: number
@@ -175,14 +175,33 @@ function domainLabel(category: BusinessCategory, routeName: string) {
 
 function inferVisualType(question: string, summary: string, category: BusinessCategory): VisualCardType {
   const text = `${question} ${summary}`.toLowerCase()
-  if (/supplier|procure|rfq|raw material|vendor|source/.test(text)) return 'Supplier'
+  // Explicit presentation requests win first.
+  if (/pie|share split|market split|portfolio split|percentage split|mix\b/.test(text)) return 'Pie'
+  if (/line chart|trend graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(text)) return 'Line'
+  if (/bar chart|rank|ranking|top \d+|scorecard|compare bars|histogram/.test(text)) return 'Bar'
+  if (/table|country table|data table|columns?|spreadsheet|tabular/.test(text)) return 'Table'
+  if (/supplier|procure|rfq|raw material|vendor|source|coa|tds|sds/.test(text)) return 'Supplier'
   if (/risk|ehs|permit|regulatory|dms|toxic|hazard|blocker/.test(text)) return 'Risk'
   if (/compare|competitor|versus| vs |benchmark|matrix/.test(text) || category === 'competitor') return 'Matrix'
   if (/roi|irr|npv|payback|capex|opex|financial|investment|feasibility|scenario/.test(text)) return 'Scenario'
-  if (/market share|share|split|segment|pie|chart|graph|trend|growth|cagr/.test(text)) return 'Chart'
+  if (/market share|share|split|segment|chart|graph|trend|growth|cagr/.test(text)) return 'Chart'
   if (/should|go\/no-go|go no-go|decision|recommend/.test(text)) return 'Decision'
   if (/\$|usd|%|mt|tons?|kg|cagr|revenue|margin|capacity/.test(text)) return 'KPI'
   return 'Executive'
+}
+
+function presentationFormat(visualType: VisualCardType) {
+  if (visualType === 'Table') return 'Research table'
+  if (visualType === 'Pie') return 'Pie chart'
+  if (visualType === 'Line') return 'Trend graph'
+  if (visualType === 'Bar') return 'Bar chart'
+  if (visualType === 'Matrix') return 'Comparison matrix'
+  if (visualType === 'Supplier') return 'Supplier scorecard'
+  if (visualType === 'Scenario') return 'Scenario model'
+  if (visualType === 'Risk') return 'Risk register'
+  if (visualType === 'Decision') return 'Decision board'
+  if (visualType === 'KPI') return 'KPI tiles'
+  return 'Executive card'
 }
 
 function metricTone(label: string, value: string): VisualMetric['tone'] {
@@ -210,6 +229,42 @@ function commandProfile(question: string, summary: string, category: BusinessCat
   const text = `${question} ${summary}`.toLowerCase()
   const keywords = topicKeywords(question, summary)
   const topic = keywords.slice(0, 3).map(word => word.replace(/-/g, ' ')).join(' / ') || domainLabel(category, '')
+  if (/country|countries|region|table|tabular|column|spreadsheet/.test(text) || visualType === 'Table') {
+    return {
+      topic,
+      metricLabels: ['Best-fit table', 'Rows to compare', 'Evidence depth', 'Data gaps', 'Decision column', 'Next research'],
+      segmentLabels: ['Verified rows', 'Assumption rows', 'Evidence gaps', 'Actionable rows'],
+      matrixLabels: ['Item / country', 'Best evidence', 'Business meaning', 'Gap', 'Action'],
+      colors: ['#4fc3f7', '#34d399', '#fb923c', '#c9a84c'],
+    }
+  }
+  if (/pie|share split|market split|portfolio split|mix\b|percentage split/.test(text) || visualType === 'Pie') {
+    return {
+      topic,
+      metricLabels: ['Main slice', 'Second slice', 'Evidence depth', 'Unverified share', 'Decision signal', 'Next data point'],
+      segmentLabels: ['Primary share', 'Secondary share', 'Opportunity share', 'Unknown / verify'],
+      matrixLabels: ['Slice', 'Meaning', 'Evidence', 'Risk', 'Action'],
+      colors: ['#c9a84c', '#4fc3f7', '#34d399', '#fb923c'],
+    }
+  }
+  if (/line chart|trend graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(text) || visualType === 'Line') {
+    return {
+      topic,
+      metricLabels: ['Trend direction', 'Growth clue', 'Inflection point', 'Forecast risk', 'Evidence depth', 'Next datapoint'],
+      segmentLabels: ['Now', 'Near-term', 'Mid-term', 'Verify gap'],
+      matrixLabels: ['Period', 'Signal', 'Business meaning', 'Risk', 'Action'],
+      colors: ['#4fc3f7', '#34d399', '#c9a84c', '#f87171'],
+    }
+  }
+  if (/bar chart|rank|ranking|top \d+|scorecard|compare bars|histogram/.test(text) || visualType === 'Bar') {
+    return {
+      topic,
+      metricLabels: ['Top factor', 'Runner-up', 'Score basis', 'Evidence depth', 'Gap', 'Next check'],
+      segmentLabels: ['Top option', 'Second option', 'Third option', 'Verify gap'],
+      matrixLabels: ['Rank', 'Option', 'Score reason', 'Risk', 'Action'],
+      colors: ['#34d399', '#4fc3f7', '#c9a84c', '#fb923c'],
+    }
+  }
   if (/capex|capacity|plant|factory|investment|feasibility|roi|payback|opex|irr|npv/.test(text)) {
     return {
       topic,
@@ -403,7 +458,7 @@ function normalizeLegacyCard(card: Partial<BusinessVisualCard>): BusinessVisualC
     visualType,
     classification: card.classification || {
       domain: domainLabel(category, routeName),
-      format: `${visualType} visual`,
+      format: presentationFormat(visualType),
       priority: confidence.includes('Critical') || category === 'investment' ? 'High' : 'Medium',
     },
     metrics: card.metrics?.length ? card.metrics : extractMetrics(question, summaryText, category, visualType),

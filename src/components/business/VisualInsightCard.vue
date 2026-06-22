@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { BusinessVisualCard, ChartSegment, MatrixRow, RiskItem, VisualMetric } from '@/stores/app'
 
 const props = defineProps<{
@@ -38,6 +39,32 @@ function segmentStyle(segment: ChartSegment, index: number) {
     background: segment.color || palette[index % palette.length],
   }
 }
+
+const chartMode = computed(() => {
+  if (props.card.visualType === 'Pie') return 'pie'
+  if (props.card.visualType === 'Line') return 'line'
+  if (props.card.visualType === 'Bar' || props.card.visualType === 'Chart') return 'bar'
+  return 'hybrid'
+})
+
+const chartModeLabel = computed(() => {
+  if (chartMode.value === 'pie') return 'Pie chart'
+  if (chartMode.value === 'line') return 'Trend graph'
+  if (chartMode.value === 'bar') return 'Bar chart'
+  return 'Signal chart'
+})
+
+const linePoints = computed(() => {
+  const segments = props.card.chartSegments.length ? props.card.chartSegments : [{ label: 'Signal', value: 40 }]
+  const max = Math.max(...segments.map(segment => segment.value), 1)
+  const width = 220
+  const height = 92
+  return segments.map((segment, index) => {
+    const x = segments.length === 1 ? width / 2 : (index / (segments.length - 1)) * width
+    const y = height - (Math.max(0, segment.value) / max) * (height - 12) + 6
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+})
 
 function donutStyle(segments: ChartSegment[]) {
   if (!segments.length) return {}
@@ -93,9 +120,18 @@ function riskClass(risk: RiskItem) {
       </div>
     </div>
 
-    <div v-if="card.chartSegments.length" class="chart-zone">
-      <div class="donut" :style="donutStyle(card.chartSegments)">
-        <div class="donut-hole">{{ card.chartSegments.length }} signals</div>
+    <div v-if="card.chartSegments.length" class="chart-zone" :class="`chart-${chartMode}`">
+      <div class="chart-visual">
+        <span class="chart-mode-label">{{ chartModeLabel }}</span>
+        <div v-if="chartMode === 'line'" class="line-graph">
+          <svg viewBox="0 0 220 104" role="img" aria-label="Trend graph">
+            <polyline class="line-fill" :points="`0,104 ${linePoints} 220,104`" />
+            <polyline class="line-stroke" :points="linePoints" />
+          </svg>
+        </div>
+        <div v-else class="donut" :style="donutStyle(card.chartSegments)">
+          <div class="donut-hole">{{ card.chartSegments.length }} signals</div>
+        </div>
       </div>
       <div class="bar-list">
         <div v-for="(segment, index) in card.chartSegments" :key="segment.label" class="bar-row">
@@ -208,9 +244,19 @@ h4 { color: $text-primary; font-size: 16px; line-height: 1.3; margin: 0; }
 .metric-danger strong { color: $accent-red; }
 .metric-opportunity strong { color: $accent-gold; }
 
-.chart-zone { display: grid; grid-template-columns: 108px 1fr; gap: 14px; align-items: center; }
+.chart-zone { display: grid; grid-template-columns: 128px 1fr; gap: 14px; align-items: center; }
+.chart-visual { display: grid; place-items: center; gap: 7px; }
+.chart-mode-label { color: $accent-gold; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
 .donut { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 .donut-hole { width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; text-align: center; color: $text-secondary; background: $bg-card; font-size: 10px; padding: 8px; }
+.line-graph { width: 118px; height: 82px; border: 1px solid rgba($accent-cyan, .28); border-radius: 14px; background: linear-gradient(180deg, rgba($accent-cyan, .08), rgba(255,255,255,.02)); padding: 8px; }
+.line-graph svg { width: 100%; height: 100%; overflow: visible; }
+.line-stroke { fill: none; stroke: $accent-cyan; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 8px rgba($accent-cyan, .55)); }
+.line-fill { fill: rgba($accent-cyan, .13); stroke: none; }
+.chart-pie .bar-track { display: none; }
+.chart-pie .bar-row { border-bottom: 1px solid rgba($border-color, .45); padding-bottom: 5px; }
+.chart-bar .donut { border-radius: 18px; background: linear-gradient(135deg, rgba($accent-cyan, .22), rgba($accent-gold, .12)) !important; }
+.chart-bar .donut-hole { border-radius: 14px; }
 .bar-list { display: flex; flex-direction: column; gap: 8px; }
 .bar-label { display: flex; justify-content: space-between; gap: 10px; color: $text-secondary; font-size: 11px; }
 .bar-label strong { color: $text-primary; }
