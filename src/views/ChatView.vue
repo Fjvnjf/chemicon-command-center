@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import type { BusinessVisualCardPatch, ChartSegment, MatrixRow, RiskItem, VisualCardType, VisualMetric } from '@/stores/app'
-import { BRIDGE_URL } from '../bridge-config'
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
 import { routeChatCommand, summarizeRouteTargets } from '@/utils/chatRouting'
 
 interface ChatMessage {
@@ -502,7 +502,13 @@ function buildOutgoingMessage(text: string): string {
 type JsonResponse<T> = T
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<JsonResponse<T>> {
-  const resp = await fetch(url, options)
+  const resp = await fetch(url, {
+    ...options,
+    headers: {
+      ...BRIDGE_FETCH_HEADERS,
+      ...(options?.headers || {}),
+    },
+  })
   const text = await resp.text()
   const contentType = resp.headers.get('content-type') || ''
   if (!resp.ok) {

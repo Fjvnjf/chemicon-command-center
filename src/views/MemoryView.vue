@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
-import { BRIDGE_URL } from '../bridge-config'
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
 
 interface MemoryEntry {
   title: string
@@ -18,7 +18,7 @@ async function fetchMemory() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch(`${BRIDGE_URL}/api/hermes/memory`)
+    const res = await fetch(`${BRIDGE_URL}/api/hermes/memory`, { headers: BRIDGE_FETCH_HEADERS })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     entries.value = data.entries ?? []

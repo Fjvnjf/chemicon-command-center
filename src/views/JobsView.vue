@@ -26,7 +26,7 @@ interface CronResponseJobs {
 
 type CronResponse = CronResponseOk | CronResponseJobs
 
-import { BRIDGE_URL } from '../bridge-config'
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
 
 const jobs = ref<CronJob[]>([])
 const loading = ref(true)
@@ -103,7 +103,7 @@ async function fetchCronJobs() {
   error.value = null
   rawText.value = null
   try {
-    const resp = await fetch(`${BRIDGE_URL}/api/hermes/cron`)
+    const resp = await fetch(`${BRIDGE_URL}/api/hermes/cron`, { headers: BRIDGE_FETCH_HEADERS })
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
     }

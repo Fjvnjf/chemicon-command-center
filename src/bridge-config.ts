@@ -31,3 +31,9 @@ function detectBridgeUrl(): string {
 }
 
 export const BRIDGE_URL = detectBridgeUrl()
+
+// localtunnel returns an HTML confirmation page to browser-origin traffic unless
+// this header is present. It is harmless for same-origin/VPS bridge calls.
+export const BRIDGE_FETCH_HEADERS: Record<string, string> = BRIDGE_URL.includes('loca.lt')
+  ? { 'bypass-tunnel-reminder': 'true' }
+  : {}

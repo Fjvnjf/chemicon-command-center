@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import { BRIDGE_URL } from '../bridge-config'
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
 
 export type BusinessCategory = 'market' | 'competitor' | 'investment' | 'general'
 export type EvidenceStatus = 'Verified' | 'User Provided' | 'Assumption' | 'To Verify' | 'Mixed'
@@ -637,7 +637,7 @@ export const useAppStore = defineStore('app', () => {
       return
     }
     try {
-      const res = await fetch(`${BRIDGE_URL}/api/hermes/status`)
+      const res = await fetch(`${BRIDGE_URL}/api/hermes/status`, { headers: BRIDGE_FETCH_HEADERS })
       if (!res.ok) return
       const data = await res.json()
       agentModel.value = data.model ?? data.agentModel ?? agentModel.value
@@ -660,7 +660,7 @@ export const useAppStore = defineStore('app', () => {
       return
     }
     try {
-      const res = await fetch(`${BRIDGE_URL}/api/hermes/usage`)
+      const res = await fetch(`${BRIDGE_URL}/api/hermes/usage`, { headers: BRIDGE_FETCH_HEADERS })
       if (!res.ok) {
         usageError.value = `HTTP ${res.status}`
         return
@@ -679,7 +679,7 @@ export const useAppStore = defineStore('app', () => {
     if (!hasBridge) {
       return { ok: false, mode: 'static-github-pages', message: 'No live Hermes bridge configured.' }
     }
-    const res = await fetch(`${BRIDGE_URL}/api/hermes/health`)
+    const res = await fetch(`${BRIDGE_URL}/api/hermes/health`, { headers: BRIDGE_FETCH_HEADERS })
     if (!res.ok) throw new Error(`Health check failed: ${res.status}`)
     return res.json()
   }

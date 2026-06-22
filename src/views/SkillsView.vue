@@ -20,7 +20,7 @@ const totalCount = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-import { BRIDGE_URL } from '../bridge-config'
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
 
 // Group skills by category
 const skillsByCategory = computed(() => {
@@ -44,7 +44,7 @@ async function fetchSkills() {
   loading.value = true
   error.value = null
   try {
-    const resp = await fetch(`${BRIDGE_URL}/api/hermes/skills`)
+    const resp = await fetch(`${BRIDGE_URL}/api/hermes/skills`, { headers: BRIDGE_FETCH_HEADERS })
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
     }

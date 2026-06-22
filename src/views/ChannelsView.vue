@@ -10,7 +10,7 @@ interface PlatformsResponse {
   gateway_running: boolean
 }
 
-import { BRIDGE_URL } from '../bridge-config'
+import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
 
 const platforms = ref<PlatformInfo[]>([])
 const gatewayRunning = ref(false)
@@ -21,7 +21,7 @@ async function fetchPlatforms() {
   loading.value = true
   error.value = null
   try {
-    const resp = await fetch(`${BRIDGE_URL}/api/hermes/platforms`)
+    const resp = await fetch(`${BRIDGE_URL}/api/hermes/platforms`, { headers: BRIDGE_FETCH_HEADERS })
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
     }
