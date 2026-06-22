@@ -387,6 +387,54 @@ function normalizeRiskItem(item: any): RiskItem | null {
   return { risk, severity, probability, mitigation }
 }
 
+function normalizeVisualType(value: unknown): VisualCardType | undefined {
+  const raw = asString(value)
+  if (!raw) return undefined
+  const exact = raw as VisualCardType
+  if (VALID_VISUAL_TYPES.has(exact)) return exact
+  const lower = raw.toLowerCase().replace(/[_-]+/g, ' ')
+  if (/pie|donut/.test(lower)) return 'Pie'
+  if (/bar|ranking|score/.test(lower)) return 'Bar'
+  if (/line|trend|forecast|growth/.test(lower)) return 'Line'
+  if (/table|country list|comparison list/.test(lower)) return 'Table'
+  if (/matrix|competitor|decision grid/.test(lower)) return 'Matrix'
+  if (/risk|ehs|hazard|permit/.test(lower)) return 'Risk'
+  if (/supplier|vendor|source/.test(lower)) return 'Supplier'
+  if (/scenario|case/.test(lower)) return 'Scenario'
+  if (/kpi|metric|capex|opex|financial/.test(lower)) return 'KPI'
+  if (/decision|recommend/.test(lower)) return 'Decision'
+  if (/chart|graph/.test(lower)) return 'Chart'
+  return 'Executive'
+}
+
+function normalizeEvidenceStatus(value: unknown): BusinessVisualCardPatch['evidenceStatus'] | undefined {
+  const lower = asString(value).toLowerCase()
+  if (!lower) return undefined
+  if (lower.includes('mixed') || (lower.includes('assumption') && lower.includes('verify'))) return 'Mixed'
+  if (lower.includes('verified')) return 'Verified'
+  if (lower.includes('user')) return 'User Provided'
+  if (lower.includes('assumption')) return 'Assumption'
+  if (lower.includes('verify') || lower.includes('unverified')) return 'To Verify'
+  return undefined
+}
+
+function normalizeConfidence(value: unknown): BusinessVisualCardPatch['confidence'] | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (value >= 0.75) return '🟢 Higher'
+    if (value >= 0.5) return '🟡 Medium'
+    if (value >= 0.25) return '🟠 Low'
+    return '🔴 Critical'
+  }
+  const raw = asString(value)
+  if (['🟢 Higher', '🟡 Medium', '🟠 Low', '🔴 Critical'].includes(raw)) return raw as BusinessVisualCardPatch['confidence']
+  const lower = raw.toLowerCase()
+  if (/high|higher|strong/.test(lower)) return '🟢 Higher'
+  if (/medium|moderate|0\.5|55|60|65|70/.test(lower)) return '🟡 Medium'
+  if (/low|weak|0\.2|0\.3|0\.4/.test(lower)) return '🟠 Low'
+  if (/critical|red/.test(lower)) return '🔴 Critical'
+  return undefined
+}
+
 function extractVisualJsonPayload(response: string): { displayText: string; patch: BusinessVisualCardPatch | null; parseNote: string } {
   const patterns = [
     /```(?:VISUAL_CARD_JSON|visual_card_json|json)\s*([\s\S]*?"metrics"[\s\S]*?)```/i,
@@ -398,18 +446,17 @@ function extractVisualJsonPayload(response: string): { displayText: string; patc
     const raw = match[1].trim()
     try {
       const parsed = JSON.parse(raw)
-      const visualType = VALID_VISUAL_TYPES.has(parsed.visualType) ? parsed.visualType : undefined
       const patch: BusinessVisualCardPatch = {
         title: asString(parsed.title) || undefined,
         summary: asString(parsed.summary) || undefined,
-        visualType,
-        evidenceStatus: ['Verified', 'User Provided', 'Assumption', 'To Verify', 'Mixed'].includes(parsed.evidenceStatus) ? parsed.evidenceStatus : undefined,
-        confidence: ['🟢 Higher', '🟡 Medium', '🟠 Low', '🔴 Critical'].includes(parsed.confidence) ? parsed.confidence : undefined,
+        visualType: normalizeVisualType(parsed.visualType || parsed.type || parsed.format),
+        evidenceStatus: normalizeEvidenceStatus(parsed.evidenceStatus || parsed.evidence || parsed.status),
+        confidence: normalizeConfidence(parsed.confidence || parsed.confidenceScore),
         metrics: asArray(parsed.metrics, normalizeMetric, 8),
-        chartSegments: asArray(parsed.chartSegments, normalizeSegment, 8),
-        matrixRows: asArray(parsed.matrixRows, normalizeMatrixRow, 8),
-        riskItems: asArray(parsed.riskItems, normalizeRiskItem, 6),
-        nextAction: asString(parsed.nextAction) || undefined,
+        chartSegments: asArray(parsed.chartSegments || parsed.segments, normalizeSegment, 8),
+        matrixRows: asArray(parsed.matrixRows || parsed.rows, normalizeMatrixRow, 8),
+        riskItems: asArray(parsed.riskItems || parsed.risks, normalizeRiskItem, 6),
+        nextAction: asString(parsed.nextAction || parsed.action) || undefined,
       }
       const displayText = response.replace(match[0], '').trim()
       return { displayText: displayText || response, patch, parseNote: 'Structured visual card JSON parsed from Hermes response.' }
