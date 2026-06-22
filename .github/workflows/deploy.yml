@@ -16,9 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-      - run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
-      - run: rm -rf dist && npm run build && touch dist/.nojekyll
+      - run: corepack enable && corepack prepare pnpm@10.25.0 --activate
+      - run: pnpm install --no-frozen-lockfile
+      - run: rm -rf dist && pnpm run build && touch dist/.nojekyll
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
