@@ -38,6 +38,18 @@ interface AttachmentPreview {
   size: number
 }
 
+type ActivityStatus = 'queued' | 'running' | 'done' | 'error'
+type ActivityKind = 'route' | 'bridge' | 'reasoning' | 'web' | 'terminal' | 'tool' | 'card' | 'result'
+
+interface ActivityEvent {
+  id: string
+  kind: ActivityKind
+  status: ActivityStatus
+  title: string
+  detail: string
+  time: string
+}
+
 const appStore = useAppStore()
 const CHAT_MESSAGES_STORAGE_KEY = 'chemicon.chatMessages.v2'
 const CHAT_SESSION_STORAGE_KEY = 'chemicon.chatSessionId.v2'
@@ -98,6 +110,8 @@ const showTerminalPanel = ref(false)
 const showOutlinePanel = ref(false)
 const attachments = ref<AttachmentPreview[]>([])
 const sessionId = ref(loadStoredSessionId())
+const activityEvents = ref<ActivityEvent[]>([])
+const activeRequestId = ref('')
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string; detail: string }> = [
   { value: 'auto', label: 'Auto', detail: 'Let Hermes choose the effort.' },
@@ -258,6 +272,64 @@ function toggleUtility(key: string) {
   if (key === 'refresh') fetchModels()
 }
 
+function addActivity(kind: ActivityKind, status: ActivityStatus, title: string, detail: string) {
+  const event: ActivityEvent = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    kind,
+    status,
+    title,
+    detail,
+    time: new Date().toLocaleTimeString(),
+  }
+  activityEvents.value = [event, ...activityEvents.value].slice(0, 24)
+  return event.id
+}
+
+function updateActivity(id: string, status: ActivityStatus, detail?: string) {
+  const event = activityEvents.value.find(item => item.id === id)
+  if (!event) return
+  event.status = status
+  if (detail) event.detail = detail
+  event.time = new Date().toLocaleTimeString()
+}
+
+function statusIcon(status: ActivityStatus) {
+  if (status === 'done') return '✓'
+  if (status === 'error') return '!'
+  if (status === 'running') return '…'
+  return '•'
+}
+
+function activityIcon(kind: ActivityKind) {
+  const icons: Record<ActivityKind, string> = {
+    route: '🧭',
+    bridge: '🔌',
+    reasoning: '🧠',
+    web: '🌐',
+    terminal: '⌘',
+    tool: '🛠',
+    card: '🧩',
+    result: '📤',
+  }
+  return icons[kind]
+}
+
+function summarizeToolCall(call: any): string {
+  if (!call || typeof call !== 'object') return String(call || 'tool call')
+  const name = call.name || call.tool || call.type || call.function || call.action || 'tool'
+  const input = call.input || call.args || call.arguments || call.query || call.command || call.url || ''
+  const status = call.status || call.result?.status || call.error || ''
+  const inputText = typeof input === 'string' ? input : JSON.stringify(input).slice(0, 160)
+  return [name, inputText, status].filter(Boolean).join(' · ').slice(0, 220)
+}
+
+function classifyToolKind(call: any): ActivityKind {
+  const text = JSON.stringify(call || {}).toLowerCase()
+  if (/terminal|shell|bash|command|process/.test(text)) return 'terminal'
+  if (/web_search|web_extract|browser|url|http|search|crawl/.test(text)) return 'web'
+  return 'tool'
+}
+
 function buildInstructions(): string {
   const modeDetail = chatModes.find(mode => mode.value === selectedMode.value)?.detail || ''
   const reasoningDetail = reasoningOptions.find(option => option.value === selectedReasoning.value)?.detail || ''
@@ -266,7 +338,7 @@ function buildInstructions(): string {
     visualResearch.value ? 'For every substantial user message, first understand the real work requested, research/think through the answer, then choose the best presentation format for the result: table for comparisons/country lists, matrix for competitors/decisions, pie chart for share/split/mix, line/trend graph for growth/forecast over time, bar chart for rankings/scores, KPI tiles for numeric business signals, risk register for hazards/permits/EHS, supplier scorecard for sourcing, or executive card for qualitative strategy.' : '',
     'For Chemicon business questions, do NOT answer as a wall of text. Structure the answer so the dashboard can create vivid visual cards in the related tab: include a short title, executive summary, recommended visual format, KPI/value signals, table/matrix rows where useful, chart-ready numeric signals where useful, risk items, evidence status, confidence, and next action. Route market topics to Market Analysis, competitor topics to Competitors, and unrelated/general business topics to Business Cards.',
     sourceBacked.value ? 'Separate claims into Verified / User Provided / Assumption / To Verify. Do not present unverified market, regulatory, customer, or supplier data as fact.' : '',
-    toolTrace.value ? 'Expose tool/API-call summary when available.' : 'Keep tool-call details minimized unless needed.',
+    toolTrace.value ? 'Expose tool/API-call summary when available, including web search, browser, terminal, file, and bridge steps. If tools were used, summarize what was called and why.' : 'Keep tool-call details minimized unless needed.',
     selectedReasoning.value === 'high' ? 'Use deeper feasibility reasoning and call out weaknesses bluntly.' : '',
   ].filter(Boolean).join('\n')
 }
@@ -325,11 +397,16 @@ async function sendMessage() {
   input.value = ''
   attachments.value = []
   sending.value = true
+  activeRequestId.value = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+  const progressTimers: number[] = []
+  addActivity('reasoning', 'queued', 'Request accepted', `Session ${sessionId.value} · ${selectedModeLabel.value} mode · ${selectedReasoningLabel.value} reasoning`)
   scrollToBottom()
 
   const routeTargets = routeChatCommand(outgoingText)
   const routedTo = summarizeRouteTargets(routeTargets)
   const intelligenceTargets = routeTargets.filter(target => target.routeName !== 'chat')
+  addActivity('route', 'done', 'Command classified', `Targets: ${routedTo}. Route count: ${routeTargets.length}.`)
+  if (intelligenceTargets.length) addActivity('card', 'running', 'Visual card placeholders created', `Preparing ${intelligenceTargets.length} routed dashboard card(s).`)
 
   for (const target of routeTargets) {
     appStore.addChatInsight(
@@ -360,6 +437,11 @@ async function sendMessage() {
     scrollToBottom()
   }
 
+  const bridgeActivityId = addActivity('bridge', 'running', 'Calling Hermes bridge', `${BRIDGE_URL || 'same-origin'}/api/chemicon-chat · model ${activeProviderLabel.value}/${activeModelLabel.value}`)
+  const reasoningActivityId = addActivity('reasoning', 'running', 'Hermes is working', 'Waiting for final response. If Hermes searches the web or runs terminal/tools, returned tool calls will appear here.')
+  progressTimers.push(window.setTimeout(() => addActivity('tool', 'running', 'Still waiting for Hermes', 'Longer tasks may include research, browser, file, or terminal work behind the bridge.'), 7000))
+  progressTimers.push(window.setTimeout(() => addActivity('bridge', 'running', 'Bridge request still open', 'Cloudflare/GitHub bridge is still waiting for Hermes. Visual placeholders are already saved.'), 16000))
+
   try {
     const data = await fetchJson<any>(`${BRIDGE_URL}/api/chemicon-chat`, {
       method: 'POST',
@@ -374,6 +456,16 @@ async function sendMessage() {
         instructions: buildInstructions(),
       }),
     })
+    progressTimers.forEach(timer => window.clearTimeout(timer))
+    updateActivity(bridgeActivityId, 'done', `Bridge returned JSON. API calls reported: ${data.api_calls ?? 0}.`)
+    updateActivity(reasoningActivityId, 'done', data.response ? `Response received: ${String(data.response).slice(0, 120)}${String(data.response).length > 120 ? '…' : ''}` : 'Hermes returned without response text.')
+    if (Array.isArray(data.tool_calls) && data.tool_calls.length) {
+      data.tool_calls.slice(0, 12).forEach((call: any, index: number) => {
+        addActivity(classifyToolKind(call), 'done', `Tool call ${index + 1}`, summarizeToolCall(call))
+      })
+    } else if (toolTrace.value) {
+      addActivity('tool', 'done', 'Tool trace', 'No detailed tool calls were returned by the current bridge response; only final API-call count is available.')
+    }
 
     let reply: string
     if (data.ok && data.response) {
@@ -395,8 +487,10 @@ async function sendMessage() {
         cardLinks.push(`${item.target.label} visual card #${updated?.id || item.cardId}`)
       }
       if (intelligenceTargets.length > 0) {
+        addActivity('card', 'done', 'Visual cards updated', cardLinks.join('; '))
         reply += `\n\n---\n**Visual cards updated**\n${cardLinks.map(link => `- ${link}`).join('\n')}\n\n*Saved to: ${routedTo}. Open the matching dashboard tab to see the best-fit presentation for your command: table/matrix, chart/graph/pie, KPI tiles, risk lights, evidence status, and next action.*`
       }
+      addActivity('result', 'done', 'Answer delivered', `${footerParts.join(' · ')} · saved to ${routedTo}`)
     } else if (data.ok && data.error) {
       reply = `⚠️ Agent error: ${data.error}\n\n*Bridge connected — API token may need refresh. The pipeline is live.*`
       pendingCards.forEach(item => appStore.updateBusinessVisualCard(item.cardId, {
@@ -419,6 +513,10 @@ async function sendMessage() {
 
     messages.value.push({ role: 'assistant', content: reply, time: new Date().toLocaleTimeString() })
   } catch (err: any) {
+    progressTimers.forEach(timer => window.clearTimeout(timer))
+    updateActivity(bridgeActivityId, 'error', err.message || 'Bridge unreachable')
+    updateActivity(reasoningActivityId, 'error', 'Hermes did not return a completed response through the browser bridge.')
+    addActivity('result', 'error', 'Request failed visibly', `The routed card remains saved. Error: ${err.message || 'Bridge unreachable'}`)
     pendingCards.forEach(item => appStore.updateBusinessVisualCard(item.cardId, {
       title: `Connection issue: ${item.target.label} · ${outgoingText.slice(0, 42)}`,
       summary: `The question was captured and routed to ${item.target.label}, but the browser could not reach the bridge: ${err.message || 'Bridge unreachable'}. This placeholder card prevents the work from disappearing; retry once the connection is healthy.`,
@@ -432,6 +530,7 @@ async function sendMessage() {
       time: new Date().toLocaleTimeString(),
     })
   } finally {
+    progressTimers.forEach(timer => window.clearTimeout(timer))
     sending.value = false
     scrollToBottom()
   }
@@ -606,6 +705,34 @@ onMounted(() => {
         </aside>
       </div>
 
+      <section v-if="activityEvents.length" class="activity-panel">
+        <div class="activity-head">
+          <div>
+            <strong>Hermes live activity</strong>
+            <p>Visible route, bridge, tool, terminal/search, card, and result events for the current chat session.</p>
+          </div>
+          <button class="retry-btn" type="button" @click="activityEvents = []">Clear activity</button>
+        </div>
+        <div class="activity-stream">
+          <article
+            v-for="event in activityEvents"
+            :key="event.id"
+            class="activity-event"
+            :class="[`activity-${event.kind}`, `status-${event.status}`]"
+          >
+            <span class="activity-kind">{{ activityIcon(event.kind) }}</span>
+            <div>
+              <div class="activity-title">
+                <span>{{ statusIcon(event.status) }}</span>
+                <strong>{{ event.title }}</strong>
+                <small>{{ event.time }}</small>
+              </div>
+              <p>{{ event.detail }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <div ref="chatArea" class="chat-messages">
         <div
           v-for="(msg, i) in messages"
@@ -624,7 +751,7 @@ onMounted(() => {
           <div class="bubble-meta">
             <span class="bubble-role">Hermes</span>
           </div>
-          <div class="bubble-content typing">Thinking with {{ selectedReasoningLabel }} reasoning in {{ selectedModeLabel }} mode...</div>
+          <div class="bubble-content typing">Working visibly with {{ selectedReasoningLabel }} reasoning in {{ selectedModeLabel }} mode — check the Hermes live activity panel for bridge/tool/card events...</div>
         </div>
       </div>
 
@@ -917,6 +1044,82 @@ onMounted(() => {
     color: $text-secondary;
     font-size: 12px;
     margin: 8px 0 0;
+  }
+}
+
+.activity-panel {
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid rgba($accent-cyan, .22);
+  border-radius: $radius-md;
+  background: linear-gradient(135deg, rgba($accent-cyan, .06), rgba($bg-card-hover, .72));
+}
+
+.activity-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+
+  strong { color: $accent-gold; }
+  p {
+    margin: 4px 0 0;
+    color: $text-secondary;
+    font-size: 12px;
+  }
+}
+
+.activity-stream {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.activity-event {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
+  background: rgba($bg-card, .62);
+
+  &.status-running { border-color: rgba($accent-gold, .34); }
+  &.status-done { border-color: rgba($accent-green, .28); }
+  &.status-error { border-color: rgba($accent-red, .42); }
+
+  p {
+    margin: 4px 0 0;
+    color: $text-secondary;
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+}
+
+.activity-kind {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba($accent-cyan, .12);
+}
+
+.activity-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: $text-primary;
+
+  small {
+    margin-left: auto;
+    color: $text-muted;
+    font-family: $font-code;
+    font-size: 10px;
   }
 }
 
