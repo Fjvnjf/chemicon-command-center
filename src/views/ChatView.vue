@@ -406,7 +406,9 @@ async function sendMessage() {
   const routedTo = summarizeRouteTargets(routeTargets)
   const intelligenceTargets = routeTargets.filter(target => target.routeName !== 'chat')
   addActivity('route', 'done', 'Command classified', `Targets: ${routedTo}. Route count: ${routeTargets.length}.`)
-  if (intelligenceTargets.length) addActivity('card', 'running', 'Visual card placeholders created', `Preparing ${intelligenceTargets.length} routed dashboard card(s).`)
+  const cardActivityId = intelligenceTargets.length
+    ? addActivity('card', 'running', 'Visual card placeholders created', `Preparing ${intelligenceTargets.length} routed dashboard card(s).`)
+    : ''
 
   for (const target of routeTargets) {
     appStore.addChatInsight(
@@ -439,8 +441,13 @@ async function sendMessage() {
 
   const bridgeActivityId = addActivity('bridge', 'running', 'Calling Hermes bridge', `${BRIDGE_URL || 'same-origin'}/api/chemicon-chat · model ${activeProviderLabel.value}/${activeModelLabel.value}`)
   const reasoningActivityId = addActivity('reasoning', 'running', 'Hermes is working', 'Waiting for final response. If Hermes searches the web or runs terminal/tools, returned tool calls will appear here.')
-  progressTimers.push(window.setTimeout(() => addActivity('tool', 'running', 'Still waiting for Hermes', 'Longer tasks may include research, browser, file, or terminal work behind the bridge.'), 7000))
-  progressTimers.push(window.setTimeout(() => addActivity('bridge', 'running', 'Bridge request still open', 'Cloudflare/GitHub bridge is still waiting for Hermes. Visual placeholders are already saved.'), 16000))
+  const waitActivityIds: string[] = []
+  progressTimers.push(window.setTimeout(() => {
+    waitActivityIds.push(addActivity('tool', 'running', 'Still waiting for Hermes', 'Longer tasks may include research, browser, file, or terminal work behind the bridge.'))
+  }, 7000))
+  progressTimers.push(window.setTimeout(() => {
+    waitActivityIds.push(addActivity('bridge', 'running', 'Bridge request still open', 'Cloudflare/GitHub bridge is still waiting for Hermes. Visual placeholders are already saved.'))
+  }, 16000))
 
   try {
     const data = await fetchJson<any>(`${BRIDGE_URL}/api/chemicon-chat`, {
@@ -457,6 +464,7 @@ async function sendMessage() {
       }),
     })
     progressTimers.forEach(timer => window.clearTimeout(timer))
+    waitActivityIds.forEach(id => updateActivity(id, 'done', 'Resolved: Hermes returned a final response through the bridge.'))
     updateActivity(bridgeActivityId, 'done', `Bridge returned JSON. API calls reported: ${data.api_calls ?? 0}.`)
     updateActivity(reasoningActivityId, 'done', data.response ? `Response received: ${String(data.response).slice(0, 120)}${String(data.response).length > 120 ? '…' : ''}` : 'Hermes returned without response text.')
     if (Array.isArray(data.tool_calls) && data.tool_calls.length) {
@@ -487,7 +495,8 @@ async function sendMessage() {
         cardLinks.push(`${item.target.label} visual card #${updated?.id || item.cardId}`)
       }
       if (intelligenceTargets.length > 0) {
-        addActivity('card', 'done', 'Visual cards updated', cardLinks.join('; '))
+        if (cardActivityId) updateActivity(cardActivityId, 'done', cardLinks.join('; '))
+        else addActivity('card', 'done', 'Visual cards updated', cardLinks.join('; '))
         reply += `\n\n---\n**Visual cards updated**\n${cardLinks.map(link => `- ${link}`).join('\n')}\n\n*Saved to: ${routedTo}. Open the matching dashboard tab to see the best-fit presentation for your command: table/matrix, chart/graph/pie, KPI tiles, risk lights, evidence status, and next action.*`
       }
       addActivity('result', 'done', 'Answer delivered', `${footerParts.join(' · ')} · saved to ${routedTo}`)
@@ -514,6 +523,8 @@ async function sendMessage() {
     messages.value.push({ role: 'assistant', content: reply, time: new Date().toLocaleTimeString() })
   } catch (err: any) {
     progressTimers.forEach(timer => window.clearTimeout(timer))
+    waitActivityIds.forEach(id => updateActivity(id, 'error', 'The bridge failed before Hermes returned a final response.'))
+    if (cardActivityId) updateActivity(cardActivityId, 'error', 'The placeholder card is still saved, but final update failed because the bridge request failed.')
     updateActivity(bridgeActivityId, 'error', err.message || 'Bridge unreachable')
     updateActivity(reasoningActivityId, 'error', 'Hermes did not return a completed response through the browser bridge.')
     addActivity('result', 'error', 'Request failed visibly', `The routed card remains saved. Error: ${err.message || 'Bridge unreachable'}`)
