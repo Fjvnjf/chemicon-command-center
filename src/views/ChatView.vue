@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import type { BusinessVisualCardPatch, ChartSegment, MatrixRow, RiskItem, VisualCardType, VisualMetric } from '@/stores/app'
 import { BRIDGE_FETCH_HEADERS, BRIDGE_URL } from '../bridge-config'
@@ -39,7 +39,7 @@ interface AttachmentPreview {
   size: number
 }
 
-type ActivityStatus = 'queued' | 'running' | 'done' | 'error'
+type ActivityStatus = 'queued' | 'running' | 'done' | 'error' | 'warning'
 type ActivityKind = 'route' | 'bridge' | 'reasoning' | 'web' | 'terminal' | 'tool' | 'card' | 'result'
 
 interface ActivityEvent {
@@ -54,6 +54,20 @@ interface ActivityEvent {
 const appStore = useAppStore()
 const CHAT_MESSAGES_STORAGE_KEY = 'chemicon.chatMessages.v2'
 const CHAT_SESSION_STORAGE_KEY = 'chemicon.chatSessionId.v2'
+const CHAT_ACTIVITY_STORAGE_KEY = 'chemicon.chatActivity.v2'
+const CHAT_ACTIVE_REQUEST_STORAGE_KEY = 'chemicon.chatActiveRequest.v2'
+
+interface ActiveChatRequest {
+  id: string
+  prompt: string
+  sessionId: string
+  mode: string
+  reasoning: string
+  routedTo: string
+  startedAt: number
+  status: 'running' | 'done' | 'error' | 'warning'
+  detail: string
+}
 
 function defaultMessages(): ChatMessage[] {
   return [
@@ -80,6 +94,63 @@ function loadStoredMessages(): ChatMessage[] {
   }
 }
 
+function persistMessages(value = messages.value) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(CHAT_MESSAGES_STORAGE_KEY, JSON.stringify(value.slice(-80)))
+  } catch {
+    // Ignore browser storage errors; live in-memory chat still works.
+  }
+}
+
+function loadStoredActivity(): ActivityEvent[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHAT_ACTIVITY_STORAGE_KEY) || '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((event: Partial<ActivityEvent>) =>
+      typeof event.id === 'string'
+      && ['route', 'bridge', 'reasoning', 'web', 'terminal', 'tool', 'card', 'result'].includes(event.kind || '')
+      && ['queued', 'running', 'done', 'error', 'warning'].includes(event.status || '')
+      && typeof event.title === 'string'
+      && typeof event.detail === 'string'
+      && typeof event.time === 'string',
+    ).slice(0, 32) as ActivityEvent[]
+  } catch {
+    return []
+  }
+}
+
+function persistActivity(value = activityEvents.value) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(CHAT_ACTIVITY_STORAGE_KEY, JSON.stringify(value.slice(0, 32)))
+  } catch {
+    // Ignore browser storage errors.
+  }
+}
+
+function loadStoredActiveRequest(): ActiveChatRequest | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHAT_ACTIVE_REQUEST_STORAGE_KEY) || 'null')
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.id !== 'string') return null
+    return parsed as ActiveChatRequest
+  } catch {
+    return null
+  }
+}
+
+function persistActiveRequest(value: ActiveChatRequest | null) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    if (value) localStorage.setItem(CHAT_ACTIVE_REQUEST_STORAGE_KEY, JSON.stringify(value))
+    else localStorage.removeItem(CHAT_ACTIVE_REQUEST_STORAGE_KEY)
+  } catch {
+    // Ignore browser storage errors.
+  }
+}
+
 function loadStoredSessionId() {
   if (typeof localStorage === 'undefined') return `chemicon-${Date.now().toString(36)}`
   const stored = localStorage.getItem(CHAT_SESSION_STORAGE_KEY)
@@ -87,9 +158,10 @@ function loadStoredSessionId() {
 }
 
 const messages = ref<ChatMessage[]>(loadStoredMessages())
+const restoredActiveRequest = loadStoredActiveRequest()
 
 const input = ref('')
-const sending = ref(false)
+const sending = ref(restoredActiveRequest?.status === 'running')
 const chatArea = ref<HTMLDivElement>()
 const fileInput = ref<HTMLInputElement>()
 const currentModel = ref<CurrentModel | null>(null)
@@ -111,8 +183,9 @@ const showTerminalPanel = ref(false)
 const showOutlinePanel = ref(false)
 const attachments = ref<AttachmentPreview[]>([])
 const sessionId = ref(loadStoredSessionId())
-const activityEvents = ref<ActivityEvent[]>([])
-const activeRequestId = ref('')
+const activityEvents = ref<ActivityEvent[]>(loadStoredActivity())
+const activeRequest = ref<ActiveChatRequest | null>(restoredActiveRequest)
+const activeRequestId = ref(restoredActiveRequest?.id || '')
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string; detail: string }> = [
   { value: 'auto', label: 'Auto', detail: 'Let Hermes choose the effort.' },
@@ -209,6 +282,28 @@ const bridgeStatusLabel = computed(() => {
   return 'Checking bridge'
 })
 const bridgeStatusClass = computed(() => currentModel.value && !isGithubStaticBackup.value ? 'badge-ok' : 'badge-warn')
+const hasRunningActivity = computed(() => activityEvents.value.some(event => event.status === 'running' || event.status === 'queued'))
+const latestActivityEvents = computed(() => activityEvents.value.slice(0, 8))
+const ekkoRunStages = computed(() => {
+  const events = activityEvents.value
+  const stageStatus = (kind: ActivityKind, fallback: ActivityStatus = 'queued'): ActivityStatus => {
+    const event = events.find(item => item.kind === kind)
+    return event?.status || fallback
+  }
+  return [
+    { key: 'reasoning', label: 'Thinking', detail: 'Hermes reasoning / planning', status: stageStatus('reasoning', activeRequest.value ? 'running' : 'queued'), icon: '🧠' },
+    { key: 'web', label: 'Research', detail: 'Web/search/source gathering when used', status: stageStatus('web'), icon: '🌐' },
+    { key: 'tool', label: 'Tools', detail: 'Bridge, terminal, files, or tool calls', status: stageStatus('tool'), icon: '🛠' },
+    { key: 'card', label: 'Visuals', detail: 'Dashboard card hydration', status: stageStatus('card'), icon: '🧩' },
+    { key: 'result', label: 'Response', detail: 'Final answer delivered', status: stageStatus('result'), icon: '📤' },
+  ]
+})
+const activeRunElapsed = computed(() => {
+  if (!activeRequest.value?.startedAt) return ''
+  const seconds = Math.max(0, Math.floor((Date.now() - activeRequest.value.startedAt) / 1000))
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+})
 
 function featureBadgeClass(status: ChatFeatureStatus) {
   if (status === 'Live') return 'badge-ok'
@@ -293,7 +388,8 @@ function addActivity(kind: ActivityKind, status: ActivityStatus, title: string, 
     detail,
     time: new Date().toLocaleTimeString(),
   }
-  activityEvents.value = [event, ...activityEvents.value].slice(0, 24)
+  activityEvents.value = [event, ...activityEvents.value].slice(0, 32)
+  persistActivity()
   return event.id
 }
 
@@ -303,11 +399,35 @@ function updateActivity(id: string, status: ActivityStatus, detail?: string) {
   event.status = status
   if (detail) event.detail = detail
   event.time = new Date().toLocaleTimeString()
+  persistActivity()
+}
+
+function updateActiveRequest(status: ActiveChatRequest['status'], detail: string) {
+  if (!activeRequest.value) return
+  activeRequest.value = { ...activeRequest.value, status, detail }
+  sending.value = status === 'running'
+  persistActiveRequest(status === 'running' ? activeRequest.value : activeRequest.value)
+}
+
+function clearActiveRequest() {
+  activeRequest.value = null
+  activeRequestId.value = ''
+  sending.value = false
+  persistActiveRequest(null)
+}
+
+function reloadPersistedChatState() {
+  messages.value = loadStoredMessages()
+  activityEvents.value = loadStoredActivity()
+  activeRequest.value = loadStoredActiveRequest()
+  activeRequestId.value = activeRequest.value?.id || ''
+  sending.value = activeRequest.value?.status === 'running'
 }
 
 function statusIcon(status: ActivityStatus) {
   if (status === 'done') return '✓'
   if (status === 'error') return '!'
+  if (status === 'warning') return '⚠'
   if (status === 'running') return '…'
   return '•'
 }
@@ -609,12 +729,29 @@ async function sendMessage() {
   attachments.value = []
   sending.value = true
   activeRequestId.value = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+  activeRequest.value = {
+    id: activeRequestId.value,
+    prompt: outgoingText,
+    sessionId: sessionId.value,
+    mode: selectedModeLabel.value,
+    reasoning: selectedReasoningLabel.value,
+    routedTo: 'Classifying…',
+    startedAt: Date.now(),
+    status: 'running',
+    detail: 'Request accepted. Hermes is preparing the run.',
+  }
+  persistActiveRequest(activeRequest.value)
+  persistMessages()
   const progressTimers: number[] = []
   addActivity('reasoning', 'queued', 'Request accepted', `Session ${sessionId.value} · ${selectedModeLabel.value} mode · ${selectedReasoningLabel.value} reasoning`)
   scrollToBottom()
 
   const routeTargets = routeChatCommand(outgoingText)
   const routedTo = summarizeRouteTargets(routeTargets)
+  if (activeRequest.value) {
+    activeRequest.value = { ...activeRequest.value, routedTo, detail: `Classified and routed to ${routedTo}. Hermes is now working.` }
+    persistActiveRequest(activeRequest.value)
+  }
   const intelligenceTargets = routeTargets.filter(target => target.routeName !== 'chat')
   addActivity('route', 'done', 'Command classified', `Targets: ${routedTo}. Route count: ${routeTargets.length}.`)
   const cardActivityId = intelligenceTargets.length
@@ -700,10 +837,12 @@ async function sendMessage() {
   }
 
   const bridgeActivityId = addActivity('bridge', 'running', 'Calling Hermes bridge', `${BRIDGE_URL || 'same-origin'}/api/chemicon-chat · model ${activeProviderLabel.value}/${activeModelLabel.value}`)
-  const reasoningActivityId = addActivity('reasoning', 'running', 'Hermes is working', 'Waiting for final response. If Hermes searches the web or runs terminal/tools, returned tool calls will appear here.')
+  const reasoningActivityId = addActivity('reasoning', 'running', 'Hermes is thinking', 'Waiting for final response. If Hermes searches the web or runs terminal/tools, returned tool calls will appear here.')
+  updateActiveRequest('running', 'Hermes is thinking/researching through the bridge. You can leave this tab and return; this live run state is persisted.')
   const waitActivityIds: string[] = []
   progressTimers.push(window.setTimeout(() => {
     waitActivityIds.push(addActivity('tool', 'running', 'Still waiting for Hermes', 'Longer tasks may include research, browser, file, or terminal work behind the bridge.'))
+    updateActiveRequest('running', 'Still running. Hermes may be researching, using tools, or waiting on the bridge.')
   }, 7000))
   progressTimers.push(window.setTimeout(() => {
     waitActivityIds.push(addActivity('bridge', 'running', 'Bridge request still open', 'Configured bridge is still waiting for Hermes. Routed visual work items are already saved.'))
@@ -796,6 +935,8 @@ async function sendMessage() {
     }
 
     messages.value.push({ role: 'assistant', content: reply, time: new Date().toLocaleTimeString() })
+    persistMessages()
+    updateActiveRequest(data.ok ? 'done' : 'warning', data.ok ? 'Final response delivered.' : 'Bridge returned an issue; request is no longer running.')
   } catch (err: any) {
     progressTimers.forEach(timer => window.clearTimeout(timer))
     waitActivityIds.forEach(id => updateActivity(id, 'error', 'The bridge failed before Hermes returned a final response.'))
@@ -817,7 +958,7 @@ async function sendMessage() {
     })
   } finally {
     progressTimers.forEach(timer => window.clearTimeout(timer))
-    sending.value = false
+    clearActiveRequest()
     scrollToBottom()
   }
 }
@@ -829,14 +970,9 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-watch(messages, value => {
-  if (typeof localStorage === 'undefined') return
-  try {
-    localStorage.setItem(CHAT_MESSAGES_STORAGE_KEY, JSON.stringify(value.slice(-80)))
-  } catch {
-    // Ignore browser storage errors; live in-memory chat still works.
-  }
-}, { deep: true })
+watch(messages, value => persistMessages(value), { deep: true })
+
+watch(activityEvents, value => persistActivity(value), { deep: true })
 
 watch(sessionId, value => {
   if (typeof localStorage === 'undefined') return
@@ -847,42 +983,25 @@ watch(sessionId, value => {
   }
 }, { immediate: true })
 
+let persistedStatePoller: number | null = null
+
 onMounted(() => {
   fetchModels()
+  reloadPersistedChatState()
+  persistedStatePoller = window.setInterval(() => {
+    if (activeRequest.value?.status === 'running') reloadPersistedChatState()
+  }, 2000)
   scrollToBottom()
+})
+
+
+onBeforeUnmount(() => {
+  if (persistedStatePoller !== null) window.clearInterval(persistedStatePoller)
 })
 </script>
 
 <template>
   <div class="chat-page">
-    <section class="chat-feature-coverage card">
-      <div class="coverage-head">
-        <div>
-          <p class="eyebrow">EKKO Chat Function Coverage</p>
-          <h2>AI Chat tab now mirrors EKKO dashboard controls</h2>
-          <p class="coverage-note">
-            Model selection, reasoning effort, modes, attachments, slash commands, side panels, capture, tool traces, and research presets are now visible in the chat surface. Partial items are labeled honestly where the Workshop bridge still lacks full upstream backend wiring.
-          </p>
-        </div>
-        <div class="coverage-stats">
-          <span class="badge badge-muted">{{ displayedChatFeatures.length }} chat functions</span>
-          <span class="badge badge-ok">{{ displayedChatFeatures.filter(feature => feature.status === 'Live').length }} live</span>
-          <span class="badge badge-info">{{ displayedChatFeatures.filter(feature => feature.status === 'Partial').length }} partial</span>
-          <span class="badge badge-warn">{{ displayedChatFeatures.filter(feature => feature.status === 'Staged').length }} staged</span>
-        </div>
-      </div>
-
-      <div class="coverage-grid">
-        <article v-for="feature in displayedChatFeatures" :key="feature.title" class="coverage-item">
-          <div class="coverage-item-top">
-            <h3>{{ feature.title }}</h3>
-            <span class="badge" :class="featureBadgeClass(feature.status)">{{ feature.status }}</span>
-          </div>
-          <p>{{ feature.detail }}</p>
-        </article>
-      </div>
-    </section>
-
     <div class="chat-card card">
       <div class="card-header chat-header-rich">
         <div>
@@ -991,34 +1110,6 @@ onMounted(() => {
         </aside>
       </div>
 
-      <section v-if="activityEvents.length" class="activity-panel">
-        <div class="activity-head">
-          <div>
-            <strong>Hermes live activity</strong>
-            <p>Visible route, bridge, tool, terminal/search, card, and result events for the current chat session.</p>
-          </div>
-          <button class="retry-btn" type="button" @click="activityEvents = []">Clear activity</button>
-        </div>
-        <div class="activity-stream">
-          <article
-            v-for="event in activityEvents"
-            :key="event.id"
-            class="activity-event"
-            :class="[`activity-${event.kind}`, `status-${event.status}`]"
-          >
-            <span class="activity-kind">{{ activityIcon(event.kind) }}</span>
-            <div>
-              <div class="activity-title">
-                <span>{{ statusIcon(event.status) }}</span>
-                <strong>{{ event.title }}</strong>
-                <small>{{ event.time }}</small>
-              </div>
-              <p>{{ event.detail }}</p>
-            </div>
-          </article>
-        </div>
-      </section>
-
       <div ref="chatArea" class="chat-messages">
         <div
           v-for="(msg, i) in messages"
@@ -1033,11 +1124,50 @@ onMounted(() => {
           <div class="bubble-content" v-html="formatMessage(msg.content)" />
         </div>
 
-        <div v-if="sending" class="chat-bubble assistant">
+        <div v-if="sending || hasRunningActivity || activityEvents.length" class="chat-bubble assistant live-run-bubble">
           <div class="bubble-meta">
-            <span class="bubble-role">Hermes</span>
+            <span class="bubble-role">Hermes live run</span>
+            <span class="bubble-time">{{ activeRunElapsed || 'live' }}</span>
           </div>
-          <div class="bubble-content typing">Working visibly with {{ selectedReasoningLabel }} reasoning in {{ selectedModeLabel }} mode — check the Hermes live activity panel for bridge/tool/card events...</div>
+          <div class="ekko-run-card">
+            <div class="ekko-run-head">
+              <div>
+                <strong>{{ activeRequest?.status === 'running' ? 'Hermes is working' : 'Hermes activity' }}</strong>
+                <p>{{ activeRequest?.detail || 'Thinking, research, tool calls, card updates, and final response events stay visible here.' }}</p>
+              </div>
+              <button class="retry-btn" type="button" @click="activityEvents = []; persistActivity(); clearActiveRequest()">Clear</button>
+            </div>
+            <div class="ekko-stage-row">
+              <div
+                v-for="stage in ekkoRunStages"
+                :key="stage.key"
+                class="ekko-stage"
+                :class="`status-${stage.status}`"
+              >
+                <span>{{ stage.icon }}</span>
+                <strong>{{ stage.label }}</strong>
+                <small>{{ statusIcon(stage.status) }} {{ stage.status }}</small>
+              </div>
+            </div>
+            <div class="activity-stream inline">
+              <article
+                v-for="event in latestActivityEvents"
+                :key="event.id"
+                class="activity-event"
+                :class="[`activity-${event.kind}`, `status-${event.status}`]"
+              >
+                <span class="activity-kind">{{ activityIcon(event.kind) }}</span>
+                <div>
+                  <div class="activity-title">
+                    <span>{{ statusIcon(event.status) }}</span>
+                    <strong>{{ event.title }}</strong>
+                    <small>{{ event.time }}</small>
+                  </div>
+                  <p>{{ event.detail }}</p>
+                </div>
+              </article>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1356,6 +1486,54 @@ onMounted(() => {
   }
 }
 
+.ekko-run-card {
+  display: grid;
+  gap: 12px;
+}
+
+.ekko-run-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+
+  p {
+    margin: 5px 0 0;
+    color: $text-secondary;
+    font-size: 12px;
+  }
+}
+
+.ekko-stage-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.ekko-stage {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
+  background: rgba($bg-root, .48);
+
+  strong { color: $text-primary; font-size: 12px; }
+  small { color: $text-muted; font-family: $font-code; font-size: 10px; text-transform: uppercase; }
+
+  &.status-running { border-color: rgba($accent-gold, .5); box-shadow: 0 0 0 1px rgba($accent-gold, .08) inset; }
+  &.status-done { border-color: rgba($accent-green, .38); }
+  &.status-error { border-color: rgba($accent-red, .5); }
+  &.status-warning { border-color: rgba($accent-orange, .5); }
+}
+
+.live-run-bubble {
+  width: min(760px, 92%);
+  max-width: 92%;
+  border-color: rgba($accent-cyan, .28) !important;
+  background: linear-gradient(135deg, rgba($accent-cyan, .08), rgba($bg-card-hover, .92)) !important;
+}
+
 .activity-stream {
   display: grid;
   gap: 8px;
@@ -1375,6 +1553,7 @@ onMounted(() => {
   &.status-running { border-color: rgba($accent-gold, .34); }
   &.status-done { border-color: rgba($accent-green, .28); }
   &.status-error { border-color: rgba($accent-red, .42); }
+  &.status-warning { border-color: rgba($accent-orange, .42); }
 
   p {
     margin: 4px 0 0;
