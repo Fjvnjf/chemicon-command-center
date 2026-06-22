@@ -174,16 +174,20 @@ function domainLabel(category: BusinessCategory, routeName: string) {
 }
 
 function inferVisualType(question: string, summary: string, category: BusinessCategory): VisualCardType {
+  const q = question.toLowerCase()
   const text = `${question} ${summary}`.toLowerCase()
-  // Explicit presentation requests win first.
-  if (/pie|share split|market split|portfolio split|percentage split|mix\b/.test(text)) return 'Pie'
-  if (/line chart|trend graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(text)) return 'Line'
-  if (/bar chart|rank|ranking|top \d+|scorecard|compare bars|histogram/.test(text)) return 'Bar'
-  if (/table|country table|data table|columns?|spreadsheet|tabular/.test(text)) return 'Table'
-  if (/supplier|procure|rfq|raw material|vendor|source|coa|tds|sds/.test(text)) return 'Supplier'
+  // Explicit presentation words in the user's command win over generic dashboard wording.
+  if (/pie|share split|market split|portfolio split|percentage split|mix\b/.test(q)) return 'Pie'
+  if (/line chart|line graph|trend graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(q)) return 'Line'
+  if (/bar chart|rank|ranking|top \d+|compare bars|histogram/.test(q)) return 'Bar'
+  if (/table|country table|data table|columns?|spreadsheet|tabular/.test(q)) return 'Table'
+  if (/supplier|procure|rfq|raw material|vendor|source|coa|tds|sds/.test(q)) return 'Supplier'
+
+  // Then infer from combined answer/question content.
   if (/risk|ehs|permit|regulatory|dms|toxic|hazard|blocker/.test(text)) return 'Risk'
   if (/compare|competitor|versus| vs |benchmark|matrix/.test(text) || category === 'competitor') return 'Matrix'
   if (/roi|irr|npv|payback|capex|opex|financial|investment|feasibility|scenario/.test(text)) return 'Scenario'
+  if (/supplier|procure|rfq|raw material|vendor|source|coa|tds|sds/.test(text)) return 'Supplier'
   if (/market share|share|split|segment|chart|graph|trend|growth|cagr/.test(text)) return 'Chart'
   if (/should|go\/no-go|go no-go|decision|recommend/.test(text)) return 'Decision'
   if (/\$|usd|%|mt|tons?|kg|cagr|revenue|margin|capacity/.test(text)) return 'KPI'
