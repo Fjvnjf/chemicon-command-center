@@ -191,6 +191,16 @@ const activeModelLabel = computed(() => selectedModel.value || currentModel.valu
 const activeProviderLabel = computed(() => selectedProvider.value || currentModel.value?.provider || 'provider')
 const isGithubPages = computed(() => typeof window !== 'undefined' && window.location.hostname.includes('github.io'))
 const isGithubStaticBackup = computed(() => isGithubPages.value && !BRIDGE_URL)
+const displayedChatFeatures = computed(() => chatFeatures.map(feature => {
+  if (isGithubStaticBackup.value && feature.title === 'Same-origin Hermes chat bridge') {
+    return {
+      ...feature,
+      status: 'Partial' as ChatFeatureStatus,
+      detail: 'This GitHub Pages URL is UI-only. It saves routed visual cards locally, while live Hermes replies require the VPS same-origin deployment or a stable HTTPS bridge URL.',
+    }
+  }
+  return feature
+}))
 const bridgeStatusLabel = computed(() => {
   if (isGithubStaticBackup.value) return 'GitHub static backup'
   if (currentModel.value) return isGithubPages.value ? 'GitHub + live bridge' : 'Bridge connected'
@@ -518,7 +528,7 @@ async function fetchModels() {
     providersWithKeys.value = []
     if (!selectedModel.value) selectedModel.value = 'gpt-5.5'
     if (!selectedProvider.value) selectedProvider.value = 'openai-codex'
-    modelLoadError.value = 'GitHub Pages is running as a static dashboard. No Cloudflare bridge is configured.'
+    modelLoadError.value = 'This GitHub Pages link is UI-only right now. Live Hermes replies need the VPS same-origin deployment or a stable HTTPS bridge URL.'
     return
   }
   try {
@@ -588,20 +598,20 @@ async function sendMessage() {
   }
 
   if (isGithubStaticBackup.value) {
-    const staticDetail = 'GitHub Pages static mode: no Cloudflare tunnel is used. The command and routed visual cards were saved locally in this browser; live Hermes execution requires a stable HTTPS API bridge configured later.'
-    addActivity('bridge', 'done', 'GitHub static backup', 'Skipped live bridge call by design — no Cloudflare URL is configured or used.')
+    const staticDetail = 'Live Hermes backend is not connected to this GitHub Pages URL. The command and routed visual cards were saved locally in this browser; use the VPS same-origin deployment or configure a stable HTTPS bridge URL for live GPT-5.5 execution.'
+    addActivity('bridge', 'warning', 'Live Hermes bridge unavailable on this URL', 'GitHub Pages is static hosting only, so this browser cannot run the Hermes backend from the GitHub domain.')
     addActivity('card', 'done', 'Visual cards captured locally', `Saved to ${routedTo}. Cards can be opened in the routed dashboard tab.`)
-    addActivity('result', 'done', 'Static capture complete', staticDetail)
+    addActivity('result', 'warning', 'Saved locally — live reply not run', staticDetail)
     pendingCards.forEach(item => appStore.updateBusinessVisualCard(item.cardId, {
-      title: `GitHub static capture: ${item.target.label} · ${outgoingText.slice(0, 42)}`,
+      title: `Saved command: ${item.target.label} · ${outgoingText.slice(0, 42)}`,
       summary: `${staticDetail} Original request: ${outgoingText}`,
       evidenceStatus: 'To Verify',
       confidence: '🟡 Medium',
-      nextAction: 'Use the saved visual card as a work item, or configure a stable non-Cloudflare HTTPS bridge in localStorage.chemicon.bridgeUrl when live Hermes execution is needed.',
+      nextAction: 'Open the live VPS deployment for real Hermes execution, or set localStorage.chemicon.bridgeUrl to a stable HTTPS bridge and reload this GitHub page.',
     }))
     messages.value.push({
       role: 'assistant',
-      content: `✅ **GitHub static capture complete**\n\nNo Cloudflare bridge was called. Your request was saved in this browser and routed visual cards were captured in: ${routedTo}.\n\nGitHub Pages can host the dashboard UI, but it cannot run the Hermes agent/API by itself. For now this GitHub deployment will keep the dashboard and visual-card routing stable without showing a broken Cloudflare connection.`,
+      content: `⚠️ **Live Hermes backend is not connected on this GitHub link**\n\nI saved this request locally and routed the visual card to: ${routedTo}.\n\nTo get a real GPT-5.5/Hermes answer in the dashboard, open the live VPS deployment or configure a stable HTTPS bridge URL for this GitHub page.`,
       time: new Date().toLocaleTimeString(),
     })
     sending.value = false
@@ -765,15 +775,15 @@ onMounted(() => {
           </p>
         </div>
         <div class="coverage-stats">
-          <span class="badge badge-muted">{{ chatFeatures.length }} chat functions</span>
-          <span class="badge badge-ok">{{ chatFeatures.filter(feature => feature.status === 'Live').length }} live</span>
-          <span class="badge badge-info">{{ chatFeatures.filter(feature => feature.status === 'Partial').length }} partial</span>
-          <span class="badge badge-warn">{{ chatFeatures.filter(feature => feature.status === 'Staged').length }} staged</span>
+          <span class="badge badge-muted">{{ displayedChatFeatures.length }} chat functions</span>
+          <span class="badge badge-ok">{{ displayedChatFeatures.filter(feature => feature.status === 'Live').length }} live</span>
+          <span class="badge badge-info">{{ displayedChatFeatures.filter(feature => feature.status === 'Partial').length }} partial</span>
+          <span class="badge badge-warn">{{ displayedChatFeatures.filter(feature => feature.status === 'Staged').length }} staged</span>
         </div>
       </div>
 
       <div class="coverage-grid">
-        <article v-for="feature in chatFeatures" :key="feature.title" class="coverage-item">
+        <article v-for="feature in displayedChatFeatures" :key="feature.title" class="coverage-item">
           <div class="coverage-item-top">
             <h3>{{ feature.title }}</h3>
             <span class="badge" :class="featureBadgeClass(feature.status)">{{ feature.status }}</span>
