@@ -13,6 +13,8 @@ function isBlockedBridgeUrl(value: string): boolean {
   return /trycloudflare\.com/i.test(value)
 }
 
+const GITHUB_LIVE_BRIDGE_URL = 'https://tough-panther-41.loca.lt'
+
 function detectBridgeUrl(): string {
   if (typeof window === 'undefined') return ''
   const stored = cleanBridgeUrl(window.localStorage?.getItem('chemicon.bridgeUrl'))
@@ -21,6 +23,10 @@ function detectBridgeUrl(): string {
     return ''
   }
   if (stored) return stored
+
+  // GitHub Pages is static hosting, but it can call this non-Cloudflare HTTPS
+  // bridge when the matching VPS tunnel/service is online.
+  if (window.location.hostname.includes('github.io')) return GITHUB_LIVE_BRIDGE_URL
   return ''
 }
 
