@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
+import type { BusinessVisualCardPatch, ChartSegment, MatrixRow, RiskItem, VisualCardType, VisualMetric } from '@/stores/app'
 import { BRIDGE_URL } from '../bridge-config'
 import { routeChatCommand, summarizeRouteTargets } from '@/utils/chatRouting'
 
@@ -330,13 +331,103 @@ function classifyToolKind(call: any): ActivityKind {
   return 'tool'
 }
 
+const VALID_VISUAL_TYPES = new Set<VisualCardType>(['Executive', 'KPI', 'Scenario', 'Matrix', 'Risk', 'Decision', 'Supplier', 'Chart', 'Table', 'Pie', 'Bar', 'Line'])
+
+function asString(value: unknown, fallback = '') {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return fallback
+}
+
+function asArray<T>(value: unknown, mapper: (item: any, index: number) => T | null, max = 8): T[] {
+  if (!Array.isArray(value)) return []
+  return value.map(mapper).filter(Boolean).slice(0, max) as T[]
+}
+
+function normalizeMetric(item: any): VisualMetric | null {
+  const label = asString(item?.label || item?.metric || item?.name)
+  const unit = asString(item?.unit)
+  const period = asString(item?.period)
+  const value = [asString(item?.value), unit].filter(Boolean).join(' ')
+  if (!label || !value) return null
+  const tone = ['positive', 'warning', 'danger', 'neutral', 'opportunity'].includes(item?.tone) ? item.tone : 'neutral'
+  const detail = asString(item?.detail || [item?.source, item?.evidenceLabel, period].filter(Boolean).join(' · '), 'Research-derived signal')
+  return { label, value, detail, tone }
+}
+
+function normalizeSegment(item: any, index: number): ChartSegment | null {
+  const label = asString(item?.label)
+  const numeric = Number(item?.value)
+  if (!label || !Number.isFinite(numeric)) return null
+  const colors = ['#4fc3f7', '#34d399', '#c9a84c', '#fb923c', '#f87171', '#a78bfa']
+  return { label, value: Math.max(0, Math.min(100, numeric)), color: asString(item?.color, colors[index % colors.length]) }
+}
+
+function normalizeMatrixRow(item: any): MatrixRow | null {
+  const label = asString(item?.label || item?.factor || item?.item || item?.country || item?.supplier || item?.competitor)
+  const value = asString(item?.value || item?.signal || item?.meaning || item?.finding || item?.evidenceLabel)
+  if (!label || !value) return null
+  const statusText = asString(item?.status, 'Review')
+  const tone = ['positive', 'warning', 'danger', 'neutral'].includes(item?.tone)
+    ? item.tone
+    : /positive|opportunity|verified|strong/i.test(statusText)
+      ? 'positive'
+      : /risk|weak|verify|assumption|gap/i.test(statusText)
+        ? 'warning'
+        : 'neutral'
+  return { label, value, status: statusText, tone }
+}
+
+function normalizeRiskItem(item: any): RiskItem | null {
+  const risk = asString(item?.risk || item?.issue || item?.gap)
+  if (!risk) return null
+  const severity = ['Low', 'Medium', 'High', 'Critical'].includes(item?.severity) ? item.severity : 'Medium'
+  const probability = ['Low', 'Medium', 'High'].includes(item?.probability) ? item.probability : severity === 'High' || severity === 'Critical' ? 'High' : 'Medium'
+  const mitigation = asString(item?.mitigation || item?.action || item?.evidenceLabel, 'Verify source evidence and assign owner before decision.')
+  return { risk, severity, probability, mitigation }
+}
+
+function extractVisualJsonPayload(response: string): { displayText: string; patch: BusinessVisualCardPatch | null; parseNote: string } {
+  const patterns = [
+    /```(?:VISUAL_CARD_JSON|visual_card_json|json)\s*([\s\S]*?"metrics"[\s\S]*?)```/i,
+    /VISUAL_CARD_JSON\s*:?\s*({[\s\S]*})\s*$/i,
+  ]
+  for (const pattern of patterns) {
+    const match = response.match(pattern)
+    if (!match) continue
+    const raw = match[1].trim()
+    try {
+      const parsed = JSON.parse(raw)
+      const visualType = VALID_VISUAL_TYPES.has(parsed.visualType) ? parsed.visualType : undefined
+      const patch: BusinessVisualCardPatch = {
+        title: asString(parsed.title) || undefined,
+        summary: asString(parsed.summary) || undefined,
+        visualType,
+        evidenceStatus: ['Verified', 'User Provided', 'Assumption', 'To Verify', 'Mixed'].includes(parsed.evidenceStatus) ? parsed.evidenceStatus : undefined,
+        confidence: ['🟢 Higher', '🟡 Medium', '🟠 Low', '🔴 Critical'].includes(parsed.confidence) ? parsed.confidence : undefined,
+        metrics: asArray(parsed.metrics, normalizeMetric, 8),
+        chartSegments: asArray(parsed.chartSegments, normalizeSegment, 8),
+        matrixRows: asArray(parsed.matrixRows, normalizeMatrixRow, 8),
+        riskItems: asArray(parsed.riskItems, normalizeRiskItem, 6),
+        nextAction: asString(parsed.nextAction) || undefined,
+      }
+      const displayText = response.replace(match[0], '').trim()
+      return { displayText: displayText || response, patch, parseNote: 'Structured visual card JSON parsed from Hermes response.' }
+    } catch (error: any) {
+      return { displayText: response, patch: null, parseNote: `VISUAL_CARD_JSON was present but could not be parsed: ${error.message || error}` }
+    }
+  }
+  return { displayText: response, patch: null, parseNote: 'No VISUAL_CARD_JSON block returned; card used fallback extraction from answer text.' }
+}
+
 function buildInstructions(): string {
   const modeDetail = chatModes.find(mode => mode.value === selectedMode.value)?.detail || ''
   const reasoningDetail = reasoningOptions.find(option => option.value === selectedReasoning.value)?.detail || ''
   return [
     `Chemicon Workshop AI tab controls selected by user: mode=${selectedMode.value} (${modeDetail}); reasoning=${selectedReasoning.value} (${reasoningDetail}); requested_provider=${activeProviderLabel.value}; requested_model=${activeModelLabel.value}.`,
     visualResearch.value ? 'For every substantial user message, first understand the real work requested, research/think through the answer, then choose the best presentation format for the result: table for comparisons/country lists, matrix for competitors/decisions, pie chart for share/split/mix, line/trend graph for growth/forecast over time, bar chart for rankings/scores, KPI tiles for numeric business signals, risk register for hazards/permits/EHS, supplier scorecard for sourcing, or executive card for qualitative strategy.' : '',
-    'For Chemicon business questions, do NOT answer as a wall of text. Structure the answer so the dashboard can create vivid visual cards in the related tab: include a short title, executive summary, recommended visual format, KPI/value signals, table/matrix rows where useful, chart-ready numeric signals where useful, risk items, evidence status, confidence, and next action. Route market topics to Market Analysis, competitor topics to Competitors, and unrelated/general business topics to Business Cards.',
+    'For Chemicon business questions, do NOT answer as a wall of text. Do real research/reasoning first, then produce a lucrative executive answer with actual data/signals and evidence labels. The dashboard card must not be a fixed template: every KPI, matrix row, chart segment, risk, and next action should come from the research answer or explicitly be marked To Verify/Assumption. Route market topics to Market Analysis, competitor topics to Competitors, and unrelated/general business topics to Business Cards.',
+    'At the END of every business/dashboard answer, include a fenced JSON block labeled VISUAL_CARD_JSON. The JSON must have this shape: {"title":"...","summary":"...","visualType":"Executive|KPI|Scenario|Matrix|Risk|Decision|Supplier|Chart|Table|Pie|Bar|Line","evidenceStatus":"Verified|User Provided|Assumption|To Verify|Mixed","confidence":"🟢 Higher|🟡 Medium|🟠 Low|🔴 Critical","metrics":[{"label":"...","value":"...","detail":"...","tone":"positive|warning|danger|neutral|opportunity"}],"chartSegments":[{"label":"...","value":42,"color":"#4fc3f7"}],"matrixRows":[{"label":"...","value":"...","status":"...","tone":"positive|warning|danger|neutral"}],"riskItems":[{"risk":"...","severity":"Low|Medium|High|Critical","probability":"Low|Medium|High","mitigation":"..."}],"nextAction":"..."}. Use specific figures, source names, dates, suppliers, countries, prices, capacities, percentages, or document gaps wherever available; never fill generic placeholders.',
     sourceBacked.value ? 'Separate claims into Verified / User Provided / Assumption / To Verify. Do not present unverified market, regulatory, customer, or supplier data as fact.' : '',
     toolTrace.value ? 'Expose tool/API-call summary when available, including web search, browser, terminal, file, and bridge steps. If tools were used, summarize what was called and why.' : 'Keep tool-call details minimized unless needed.',
     selectedReasoning.value === 'high' ? 'Use deeper feasibility reasoning and call out weaknesses bluntly.' : '',
@@ -477,7 +568,10 @@ async function sendMessage() {
 
     let reply: string
     if (data.ok && data.response) {
-      reply = data.response
+      const visualPayload = extractVisualJsonPayload(String(data.response))
+      if (visualPayload.patch) addActivity('card', 'done', 'Structured card data parsed', visualPayload.parseNote)
+      else addActivity('card', 'running', 'Card parser fallback', visualPayload.parseNote)
+      reply = visualPayload.displayText
       const footerParts = [
         data.api_calls ? `${data.api_calls} API calls` : '',
         data.model || selectedModel.value || 'agent',
@@ -488,9 +582,11 @@ async function sendMessage() {
       const cardLinks: string[] = []
       for (const item of pendingCards) {
         appStore.addBriefing(outgoingText, data.response, item.target.category, item.target.routeName)
+        const structuredPatch = visualPayload.patch || {}
         const updated = appStore.updateBusinessVisualCard(item.cardId, {
-          title: `${item.target.label}: ${outgoingText.slice(0, 52)}`,
-          summary: data.response,
+          ...structuredPatch,
+          title: structuredPatch.title || `${item.target.label}: ${outgoingText.slice(0, 52)}`,
+          summary: structuredPatch.summary || reply,
         })
         cardLinks.push(`${item.target.label} visual card #${updated?.id || item.cardId}`)
       }
