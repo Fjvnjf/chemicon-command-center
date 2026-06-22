@@ -627,8 +627,15 @@ export const useAppStore = defineStore('app', () => {
     title.value = t
   }
 
-  // Bridge API integration
+  // Bridge API integration. In GitHub Pages static-backup mode BRIDGE_URL is blank,
+  // so do not call same-origin /api/* and do not show broken backend errors.
+  const hasBridge = Boolean(BRIDGE_URL)
+
   async function fetchStatus() {
+    if (!hasBridge) {
+      agentStatus.value = 'offline'
+      return
+    }
     try {
       const res = await fetch(`${BRIDGE_URL}/api/hermes/status`)
       if (!res.ok) return
@@ -647,6 +654,11 @@ export const useAppStore = defineStore('app', () => {
   async function fetchUsage() {
     usageLoading.value = true
     usageError.value = null
+    if (!hasBridge) {
+      usageError.value = 'Static GitHub Pages mode: no live Hermes bridge configured.'
+      usageLoading.value = false
+      return
+    }
     try {
       const res = await fetch(`${BRIDGE_URL}/api/hermes/usage`)
       if (!res.ok) {
@@ -664,13 +676,16 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function fetchHealth() {
+    if (!hasBridge) {
+      return { ok: false, mode: 'static-github-pages', message: 'No live Hermes bridge configured.' }
+    }
     const res = await fetch(`${BRIDGE_URL}/api/hermes/health`)
     if (!res.ok) throw new Error(`Health check failed: ${res.status}`)
     return res.json()
   }
 
-  // Auto-fetch status on store init
-  fetchStatus()
+  // Auto-fetch status on store init only when a stable bridge is configured.
+  if (hasBridge) fetchStatus()
 
   return {
     sidebarCollapsed,
