@@ -478,6 +478,53 @@ function extractVisualJsonPayload(response: string): { displayText: string; patc
   return { displayText: response, patch: null, parseNote: 'No VISUAL_CARD_JSON block returned; card used fallback extraction from answer text.' }
 }
 
+
+function sentenceChunks(text: string, max = 5): string[] {
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9])/)
+    .map(part => part.replace(/^[-*•\d.)\s]+/, '').trim())
+    .filter(part => part.length > 24)
+    .slice(0, max)
+}
+
+function buildFallbackVisualPatch(answer: string, question: string, targetLabel: string): BusinessVisualCardPatch {
+  const chunks = sentenceChunks(answer, 6)
+  const first = chunks[0] || answer.replace(/\s+/g, ' ').slice(0, 240) || question
+  const second = chunks[1] || 'Strategy details need source confirmation before business decisions.'
+  const third = chunks[2] || 'Evidence status is mixed/to-verify unless the response names current source documents.'
+  const lower = `${question} ${answer}`.toLowerCase()
+  const isCompetitor = /competitor|rival|fastest growing|strategy/.test(lower) || /competitor/i.test(targetLabel)
+  const visualType: VisualCardType = isCompetitor ? 'Matrix' : normalizeVisualType(answer) || 'Executive'
+  const evidenceStatus = /verified|source|according to|reported|filing|annual report|market data/i.test(answer) ? 'Mixed' : 'To Verify'
+  const titleLead = isCompetitor ? 'Competitor strategy answer' : `${targetLabel} answer`
+  return {
+    title: `${titleLead}: ${question.replace(/[@/#]/g, '').trim().slice(0, 64)}`,
+    summary: first,
+    visualType,
+    evidenceStatus,
+    confidence: evidenceStatus === 'Mixed' ? '🟡 Medium' : '🟠 Low',
+    metrics: [
+      { label: 'Answer status', value: 'Final Hermes response', detail: 'This card was updated after the bridge returned; it is no longer the temporary working card.', tone: 'positive' },
+      { label: 'Evidence', value: evidenceStatus, detail: 'Use source documents before final business action.', tone: evidenceStatus === 'Mixed' ? 'warning' : 'danger' },
+      { label: 'Requested view', value: targetLabel, detail: 'Routed from chat command/keywords', tone: 'neutral' },
+    ],
+    matrixRows: [
+      { label: isCompetitor ? 'Likely fastest-growing competitor / target' : 'Main answer', value: first, status: evidenceStatus, tone: 'warning' },
+      { label: isCompetitor ? 'Observed strategy' : 'Strategic meaning', value: second, status: 'Strategy signal', tone: 'neutral' },
+      { label: 'Evidence note', value: third, status: 'Verify', tone: 'warning' },
+      { label: 'Chemicon implication', value: chunks[3] || 'Convert this answer into customer, product, pricing, and channel counter-moves only after source verification.', status: 'Next decision', tone: 'positive' },
+    ],
+    chartSegments: [
+      { label: 'Answer content', value: 55, color: '#4fc3f7' },
+      { label: 'Needs verification', value: 30, color: '#c9a84c' },
+      { label: 'Action framing', value: 15, color: '#34d399' },
+    ],
+    riskItems: [{ risk: 'Competitor-growth claims can be wrong if based on stale or unsourced web data.', severity: 'High', probability: 'Medium', mitigation: 'Confirm with current sales/customer evidence, import/export records, filings, RFQs, distributor checks, and supplier/customer interviews.' }],
+    nextAction: isCompetitor ? 'Verify the named competitor against current customer/RFQ signals, then build a counter-strategy by product, price, geography, and channel.' : 'Validate evidence, assign owner, and turn the answer into a tracked business action.',
+  }
+}
+
 function buildInstructions(): string {
   const modeDetail = chatModes.find(mode => mode.value === selectedMode.value)?.detail || ''
   const reasoningDetail = reasoningOptions.find(option => option.value === selectedReasoning.value)?.detail || ''
@@ -586,11 +633,38 @@ async function sendMessage() {
   const pendingCards = intelligenceTargets.map(target => {
     const card = appStore.addBusinessVisualCard(
       outgoingText,
-      `⏳ Working on this command with ${selectedReasoningLabel.value} reasoning. I am choosing the best visual presentation for this specific request — table, matrix, pie, trend graph, bar chart, KPI tiles, risk register, supplier scorecard, or executive card — then the chat reply will update this routed card with evidence status and next action. Routed because: ${target.reason}.`,
+      `Live Hermes is working on this request. This is a temporary status card, not the final competitor or market answer yet. The final card will replace this status after Hermes returns the researched response.`,
       target.category,
       target.routeName,
-      `Working: ${target.label} · ${outgoingText.slice(0, 44)}`,
+      `Research running — not final: ${target.label} · ${outgoingText.slice(0, 36)}`,
     )
+    appStore.updateBusinessVisualCard(card.id, {
+      title: `Research running — not final: ${target.label}`,
+      summary: `Live Hermes is actively working on: “${outgoingText.slice(0, 140)}${outgoingText.length > 140 ? '…' : ''}”. This card is only a visible work-in-progress marker; do not use it as the answer.`,
+      bullets: [
+        'Status: live Hermes request is running through the bridge.',
+        'Not final: competitor name, growth proof, strategy, evidence, and next action will appear after the response returns.',
+        `Routed to: ${target.label} because ${target.reason}.`,
+      ],
+      evidenceStatus: 'To Verify',
+      confidence: '🟠 Low',
+      visualType: 'Executive',
+      metrics: [
+        { label: 'Live status', value: 'Researching now', detail: 'Bridge request is open', tone: 'warning' },
+        { label: 'Answer quality', value: 'Not final yet', detail: 'Waiting for Hermes response', tone: 'danger' },
+        { label: 'Destination', value: target.label, detail: 'Final visual card will update here', tone: 'neutral' },
+      ],
+      chartSegments: [
+        { label: 'Work in progress', value: 70, color: '#c9a84c' },
+        { label: 'Final answer pending', value: 30, color: '#fb923c' },
+      ],
+      matrixRows: [
+        { label: 'Current state', value: 'Hermes is thinking/researching. This is not the requested competitor strategy answer yet.', status: 'Working', tone: 'warning' },
+        { label: 'Will update with', value: 'fastest-growing competitor, strategy, evidence status, confidence, and Chemicon response move.', status: 'Pending', tone: 'neutral' },
+      ],
+      riskItems: [{ risk: 'Do not treat this temporary card as a business answer.', severity: 'Medium', probability: 'High', mitigation: 'Wait for the final card update or retry if the bridge reports a timeout.' }],
+      nextAction: 'Wait for the final Hermes response; if this stays in progress for more than two minutes, retry or check bridge health.',
+    })
     return { target, cardId: card.id }
   })
 
@@ -633,6 +707,16 @@ async function sendMessage() {
   }, 7000))
   progressTimers.push(window.setTimeout(() => {
     waitActivityIds.push(addActivity('bridge', 'running', 'Bridge request still open', 'Configured bridge is still waiting for Hermes. Routed visual work items are already saved.'))
+    pendingCards.forEach(item => appStore.updateBusinessVisualCard(item.cardId, {
+      title: `Still researching — not final: ${item.target.label}`,
+      summary: `Hermes is still working on “${outgoingText.slice(0, 140)}${outgoingText.length > 140 ? '…' : ''}”. This is a live progress marker, not a template answer. The final competitor/market card will replace it when the bridge returns.`,
+      metrics: [
+        { label: 'Live status', value: 'Still working', detail: 'Bridge request remains open', tone: 'warning' },
+        { label: 'Elapsed', value: '16s+', detail: 'Longer research can take more time', tone: 'neutral' },
+        { label: 'Answer quality', value: 'Final pending', detail: 'Do not use this as the answer', tone: 'danger' },
+      ],
+      nextAction: 'Keep the chat open. If it passes two minutes and reports a timeout, resend or use a narrower competitor question.',
+    }))
   }, 16000))
 
   try {
@@ -677,7 +761,7 @@ async function sendMessage() {
       const cardLinks: string[] = []
       for (const item of pendingCards) {
         appStore.addBriefing(outgoingText, data.response, item.target.category, item.target.routeName)
-        const structuredPatch = visualPayload.patch || {}
+        const structuredPatch = visualPayload.patch || buildFallbackVisualPatch(reply, outgoingText, item.target.label)
         const updated = appStore.updateBusinessVisualCard(item.cardId, {
           ...structuredPatch,
           title: structuredPatch.title || `${item.target.label}: ${outgoingText.slice(0, 52)}`,
