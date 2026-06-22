@@ -229,16 +229,7 @@ function commandProfile(question: string, summary: string, category: BusinessCat
   const text = `${question} ${summary}`.toLowerCase()
   const keywords = topicKeywords(question, summary)
   const topic = keywords.slice(0, 3).map(word => word.replace(/-/g, ' ')).join(' / ') || domainLabel(category, '')
-  if (/country|countries|region|table|tabular|column|spreadsheet/.test(text) || visualType === 'Table') {
-    return {
-      topic,
-      metricLabels: ['Best-fit table', 'Rows to compare', 'Evidence depth', 'Data gaps', 'Decision column', 'Next research'],
-      segmentLabels: ['Verified rows', 'Assumption rows', 'Evidence gaps', 'Actionable rows'],
-      matrixLabels: ['Item / country', 'Best evidence', 'Business meaning', 'Gap', 'Action'],
-      colors: ['#4fc3f7', '#34d399', '#fb923c', '#c9a84c'],
-    }
-  }
-  if (/pie|share split|market split|portfolio split|mix\b|percentage split/.test(text) || visualType === 'Pie') {
+  if (visualType === 'Pie' || /pie|share split|market split|portfolio split|mix\b|percentage split/.test(text)) {
     return {
       topic,
       metricLabels: ['Main slice', 'Second slice', 'Evidence depth', 'Unverified share', 'Decision signal', 'Next data point'],
@@ -247,7 +238,7 @@ function commandProfile(question: string, summary: string, category: BusinessCat
       colors: ['#c9a84c', '#4fc3f7', '#34d399', '#fb923c'],
     }
   }
-  if (/line chart|trend graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(text) || visualType === 'Line') {
+  if (visualType === 'Line' || /line chart|trend graph|trendline|timeline|over time|forecast|cagr|growth trend|monthly|yearly|annual/.test(text)) {
     return {
       topic,
       metricLabels: ['Trend direction', 'Growth clue', 'Inflection point', 'Forecast risk', 'Evidence depth', 'Next datapoint'],
@@ -256,13 +247,22 @@ function commandProfile(question: string, summary: string, category: BusinessCat
       colors: ['#4fc3f7', '#34d399', '#c9a84c', '#f87171'],
     }
   }
-  if (/bar chart|rank|ranking|top \d+|scorecard|compare bars|histogram/.test(text) || visualType === 'Bar') {
+  if (visualType === 'Bar' || /bar chart|rank|ranking|top \d+|compare bars|histogram/.test(text)) {
     return {
       topic,
       metricLabels: ['Top factor', 'Runner-up', 'Score basis', 'Evidence depth', 'Gap', 'Next check'],
       segmentLabels: ['Top option', 'Second option', 'Third option', 'Verify gap'],
       matrixLabels: ['Rank', 'Option', 'Score reason', 'Risk', 'Action'],
       colors: ['#34d399', '#4fc3f7', '#c9a84c', '#fb923c'],
+    }
+  }
+  if (visualType === 'Table' || /country|countries|region|table|tabular|column|spreadsheet/.test(text)) {
+    return {
+      topic,
+      metricLabels: ['Best-fit table', 'Rows to compare', 'Evidence depth', 'Data gaps', 'Decision column', 'Next research'],
+      segmentLabels: ['Verified rows', 'Assumption rows', 'Evidence gaps', 'Actionable rows'],
+      matrixLabels: ['Item / country', 'Best evidence', 'Business meaning', 'Gap', 'Action'],
+      colors: ['#4fc3f7', '#34d399', '#fb923c', '#c9a84c'],
     }
   }
   if (/capex|capacity|plant|factory|investment|feasibility|roi|payback|opex|irr|npv/.test(text)) {
