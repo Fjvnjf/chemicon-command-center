@@ -9,9 +9,17 @@ function cleanBridgeUrl(value: string | null | undefined): string {
   return (value || '').trim().replace(/\/+$/, '')
 }
 
+function isBlockedBridgeUrl(value: string): boolean {
+  return /trycloudflare\.com/i.test(value)
+}
+
 function detectBridgeUrl(): string {
   if (typeof window === 'undefined') return ''
   const stored = cleanBridgeUrl(window.localStorage?.getItem('chemicon.bridgeUrl'))
+  if (stored && isBlockedBridgeUrl(stored)) {
+    window.localStorage?.removeItem('chemicon.bridgeUrl')
+    return ''
+  }
   if (stored) return stored
   return ''
 }
